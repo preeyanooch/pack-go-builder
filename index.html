@@ -365,6 +365,10 @@ let dismissedDuplicateWarningFor = '';
 // เก็บจำนวนจุดติดป้ายล่าสุดที่รู้ว่าถูกต้อง (ตอนโหลด/เซฟสำเร็จ) ไว้เทียบตอนจะเซฟรอบถัดไป —
 // ถ้าจู่ๆ จะเซฟจุดติดป้ายเป็นศูนย์ทั้งที่เมื่อกี้ยังมีอยู่ ให้เบรกแล้วถามยืนยันก่อน กัน autosave ทับข้อมูลหายแบบเงียบๆ
 let lastKnownSignageCount = null;
+// นับจำนวนการโหลดสาขาที่กำลังทำงานอยู่ (loadSession) — ถ้า >0 ห้าม autosave ทำงานเด็ดขาด
+// เพราะระหว่างรอโหลดข้อมูลเดิม (อาจช้าหลายวินาที) ฟอร์มยังว่างอยู่ ถ้า autosave ยิงตอนนี้
+// จะเซฟค่าว่างทับข้อมูลเดิมที่กำลังจะโหลดมา ทำให้จุดติดป้ายที่บันทึกไว้หายจริง (บั๊กที่เจอจริง)
+let restoringSessionCount = 0;
 const signages = [];
 const helpItems = [];
 let dayPlans = [];
@@ -2958,6 +2962,7 @@ function applyState(s){
 // ---------- Auto-save (fires automatically after any edit, no manual button needed) ----------
 let autosaveTimer = null;
 function scheduleAutosave(){
+  if(restoringSessionCount > 0) return; // กำลังโหลดข้อมูลเดิมอยู่ ห้ามตั้งเวลาบันทึกทับ
   if(autosaveTimer) clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(saveSessionSilently, 1200);
 }
@@ -3044,6 +3049,7 @@ async function gsRun(funcName, ...args){
 }
 
 async function saveSessionSilently(){
+  if(restoringSessionCount > 0) return; // กันซ้ำ: เผื่อ timer ถูกตั้งไว้ก่อนเริ่มโหลด แล้วดันมาทำงานตอนกำลังโหลดพอดี
   const name = document.getElementById('branchName').value || document.getElementById('branchCode').value;
   if(!name) return;
   const indicator = document.getElementById('autosaveIndicator');
@@ -3199,6 +3205,7 @@ function signageCountDropGuard(){
   return true;
 }
 async function saveSession(){
+  if(restoringSessionCount > 0){ alert('กำลังโหลดข้อมูลเดิมอยู่ กรุณารอสักครู่ก่อนบันทึก'); return; }
   const name = document.getElementById('branchName').value || document.getElementById('branchCode').value;
   if(!name){ alert('กรุณากรอกชื่อสาขาหรือรหัสสาขาก่อนบันทึก'); return; }
   if(!signageCountDropGuard()) return;
@@ -3211,6 +3218,12 @@ async function saveSession(){
   }catch(e){ alert('บันทึกไม่สำเร็จ: ' + e.message); }
 }
 async function loadSession(name){
+  // กันบั๊ก "โหลดของเก่ายังไม่เสร็จ แต่ autosave ดันเซฟของว่างทับ": ระหว่างโหลด (อาจช้าหลายวินาที
+  // เพราะ Apps Script ไม่เสถียร) ห้าม autosave ทำงานเด็ดขาด — เคลียร์ timer ที่ตั้งค้างไว้ก่อนหน้าด้วย
+  if(autosaveTimer){ clearTimeout(autosaveTimer); autosaveTimer = null; }
+  restoringSessionCount++;
+  const indicator = document.getElementById('autosaveIndicator');
+  if(indicator){ indicator.textContent = 'กำลังโหลดข้อมูลเดิมของ "' + name + '"...'; indicator.style.opacity = '1'; }
   try{
     const jsonStr = await gsRun('loadDraft', name);
     if(!jsonStr) return;
@@ -3219,7 +3232,11 @@ async function loadSession(name){
     dismissedDuplicateWarningFor = '';
     lastKnownSignageCount = signages.length;
     await restorePhotosForBranch(name);
+    if(indicator){ indicator.textContent = '✓ โหลดข้อมูลเดิมของ "' + name + '" แล้ว'; indicator.style.opacity = '1'; }
   }catch(e){ alert('โหลดไม่สำเร็จ: ' + e.message); }
+  finally{
+    restoringSessionCount = Math.max(0, restoringSessionCount - 1);
+  }
 }
 async function refreshSavedList(){
   const row = document.getElementById('savedRow');
