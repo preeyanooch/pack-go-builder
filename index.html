@@ -1,0 +1,3280 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<!-- This site is hosted on Netlify. Anyone can build and deploy a site
+     like this one for free: https://netlify.new/?utm_campaign=ai-legible&utm_source=comment&utm_medium=referral&utm_id=66b6bfbf-8dd4-430f-8fe2-be73cf3889bc
+     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
+<meta name="hosting-provider" content="Netlify">
+<meta name="netlify-deploy" content="https://netlify.new/?utm_campaign=ai-legible&amp;utm_source=meta&amp;utm_medium=referral&amp;utm_id=66b6bfbf-8dd4-430f-8fe2-be73cf3889bc">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pack GO Builder | CJX New Store</title>
+<style>
+  :root{
+    --red: #E4002B;
+    --red-dark: #B0001F;
+    --ink: #1C1B19;
+    --paper: #FBF9F6;
+    --card: #FFFFFF;
+    --line: #E8E3DC;
+    --muted: #7A756C;
+    --amber: #C77D00;
+    --amber-bg: #FFF6E6;
+    --ok: #157F3C;
+    --ok-bg: #EAF6EE;
+    --gold: #C9A227;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--paper); color:var(--ink); font-family:'Segoe UI','Noto Sans Thai',-apple-system,sans-serif; line-height:1.55;}
+  .wrap{max-width:960px; margin:0 auto; padding:26px 20px 90px;}
+  header{border-bottom:3px solid var(--red); padding-bottom:16px; margin-bottom:26px;}
+  header .brand{font-size:12.5px; letter-spacing:.12em; color:var(--red); font-weight:700; text-transform:uppercase;}
+  header h1{margin:4px 0 0; font-size:25px; font-weight:800;}
+  header .sub{color:var(--muted); font-size:13.5px; margin-top:4px;}
+
+  .step-label{display:flex; align-items:center; gap:10px; margin:30px 0 12px;}
+  .step-num{width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none;}
+  .step-label h2{font-size:16.5px;margin:0;font-weight:700;}
+  .step-label .note{font-size:12px; color:var(--muted); margin-left:auto;}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:14px;}
+  label{display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:#3a3733;}
+  input[type=text], input[type=date], input[type=number], select{
+    width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit; margin-bottom:12px; background:#fff;
+  }
+  textarea{width:100%; min-height:80px; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit; resize:vertical; margin-bottom:12px;}
+  .row{display:flex; gap:12px; flex-wrap:wrap;}
+  .row > div{flex:1; min-width:180px;}
+  .row3 > div{flex:1; min-width:140px;}
+
+  button{background:var(--red); color:#fff; border:none; padding:10px 18px; border-radius:8px; font-size:13.5px; font-weight:700; cursor:pointer; font-family:inherit;}
+  button:hover{background:var(--red-dark);}
+  button.secondary{background:var(--ink);}
+  button.ghost{background:transparent; color:var(--ink); border:1px solid var(--line); font-weight:600;}
+  button.ghost:hover{background:#f2efe9;}
+  button.small{padding:6px 12px; font-size:12.5px;}
+  button.danger{background:#fff; color:var(--red); border:1px solid var(--red); font-weight:600;}
+  button.danger:hover{background:#FDECEC;}
+  .btn-row{display:flex; gap:10px; margin-top:6px; flex-wrap:wrap;}
+
+  .auto-badge{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:12px; background:var(--ok-bg); color:var(--ok); margin-left:6px;}
+  .manual-badge{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:12px; background:var(--amber-bg); color:var(--amber); margin-left:6px;}
+  .readout{background:#F5F2ED; border:1px solid var(--line); border-radius:8px; padding:10px 14px; font-size:13.5px; margin-bottom:10px;}
+  .readout b{color:var(--ink);}
+
+  .subcard{border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:12px; background:#FBFAF8; position:relative;}
+  .subcard .remove-btn{position:absolute; top:10px; right:10px;}
+  .subcard-title{font-weight:700; font-size:13.5px; margin-bottom:10px;}
+
+  .hint{font-size:12.5px; color:var(--muted); margin-top:4px;}
+  .error{background:#FDECEC; border:1px solid #F4B6B6; color:#8a1f1f; padding:10px 14px; border-radius:8px; font-size:13px; margin-top:10px;}
+  .hidden{display:none;}
+  table{width:100%; border-collapse:collapse; margin-bottom:8px;}
+  th, td{border:1px solid var(--line); padding:6px 8px; font-size:13px; text-align:left; vertical-align:top;}
+  th{background:#F5F2ED; font-weight:700;}
+  td input, td select{margin-bottom:0; padding:6px 8px; font-size:12.5px;}
+
+  .day-block{border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:14px; background:#fff;}
+  .day-block h3{margin:0 0 10px; font-size:14.5px;}
+
+  .final-box{background:var(--amber-bg); border:1px solid #f0d9a8; border-radius:10px; padding:18px; margin-top:10px;}
+  pre.final-text{white-space:pre-wrap; font-family:inherit; font-size:13px; background:#fff; border:1px solid #f0d9a8; border-radius:8px; padding:14px; margin:12px 0 0; max-height:500px; overflow-y:auto;}
+
+  .saved-list{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+  .saved-chip{font-size:12.5px; padding:6px 12px; border:1px solid var(--line); border-radius:20px; background:#fff; cursor:pointer;}
+  .saved-chip:hover{border-color:var(--red); color:var(--red);}
+
+  /* Design composer modal */
+  .composer-overlay{position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:1000; display:flex; align-items:center; justify-content:center; padding:16px;}
+  .composer-overlay.hidden{display:none;}
+  .composer-box{background:#fff; border-radius:12px; padding:16px; max-width:560px; width:100%; max-height:92vh; overflow-y:auto;}
+  .composer-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .composer-header h3{margin:0; font-size:15px;}
+  .composer-stage{position:relative; width:100%; overflow:hidden; border-radius:8px; border:1px solid var(--line); background:#eee;}
+  .composer-stage img.bg{width:100%; display:block; user-select:none; -webkit-user-drag:none;}
+  .composer-stage .design{position:absolute; cursor:grab; touch-action:none; user-select:none;}
+  .composer-stage .design:active{cursor:grabbing;}
+  .composer-controls{margin-top:12px; display:flex; flex-direction:column; gap:8px;}
+  .composer-controls .row-inline{display:flex; align-items:center; gap:8px;}
+  .composer-controls input[type=range]{flex:1; margin-bottom:0;}
+</style>
+</head>
+<body>
+
+<style>
+  #loginGate{position:fixed; inset:0; background:linear-gradient(135deg,#1C1B19,#3a2f27); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;}
+  #loginGate.hidden{display:none;}
+  #loginGate .gateCard{background:#fff; border-radius:14px; padding:32px 28px; max-width:360px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.35); text-align:center;}
+  #loginGate .gateCard h2{margin:6px 0 2px; font-size:19px; color:#1C1B19;}
+  #loginGate .gateCard p.sub{color:#7A756C; font-size:12.5px; margin:0 0 20px;}
+  #loginGate .gateCard input{width:100%; box-sizing:border-box; padding:11px 13px; margin-bottom:10px; border:1px solid #E0DCD3; border-radius:8px; font-size:14px; font-family:inherit;}
+  #loginGate .gateCard input:focus{outline:none; border-color:#E4002B;}
+  #loginGate .gateCard button{width:100%; padding:11px; font-size:14px; margin-top:4px;}
+  #loginGate .gateErr{color:#E4002B; font-size:12.5px; min-height:16px; margin-top:10px;}
+  #loginGate .gateLogo{height:44px; margin-bottom:10px;}
+</style>
+<div id="loginGate">
+  <div class="gateCard">
+    <img class="gateLogo" id="gateLogo" alt="CJX">
+    <h2>เข้าสู่ระบบ Pack GO Builder</h2>
+    <p class="sub">กรอกชื่อและรหัสส่วนตัวของคุณเพื่อเข้าใช้งาน</p>
+    <input type="text" id="gateName" placeholder="ชื่อ-นามสกุล หรือชื่อเล่น" autocomplete="username">
+    <input type="password" id="gatePassword" placeholder="รหัสส่วนตัว" autocomplete="current-password">
+    <button onclick="attemptLogin()">เข้าสู่ระบบ</button>
+    <div class="gateErr" id="gateErr"></div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header>
+    <div class="header-row" style="display:flex; align-items:center; gap:12px; margin-bottom:4px;">
+      <img id="headerLogo" alt="CJX" style="height:40px; width:auto; border-radius:6px;">
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAMAAACahl6sAAADAFBMVEVHcEz///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8AnVD9sxb9//4BnFACnlEBjkY/tEwBjEX8shUBnVEnp0kCm00tqUkCnk0GoFUxFxMZo0sBmEYRo0sBnE4Cn1Efs08Lq0/7/vwEpU9AtE8DoU1AtkwBmkkvt00itVAOsFEAlkIrDwz9tBgVslEQrk38tBQ+tEj7rxgBnU4XsFAnFw0Ln001EA8apks8skz+thEEnUoepUwptk0pHRUEqVP6sw4ipUkDpE35txD6shkzHBD8th4+uE0Ekkk8skcHqEsntFD+uhP8rw1EskgGpFYGlUwNoE/1sBEeDg0xBwv/vhAlBwkyJRYesE04tksUpU0DmE08FhcoqUvv+PITo1r+sx4qFBgVBAo7r0YToEkhqEj1sxY1HR8iRCWz4sovskw3uk4dUCr/whceFRBkw5IhBxhDvU17zKQuDSEhJxUEnkb6sCQKmVEcXjNEuVQrrUpBr0//viAbHA8We0EeOR4Dhj7ytxLG6dj4rA/2tyb6qyIeq00+w1LAjx7+uiKg27xKtFQ9BQzZ8eYZhEhFrUcSnE0Zcj5AlEctOyFDHxEfECBKKRURqU8XaTg0TCePYiILnFUHrFuR1LJcOxhDtn0ImkKibiT1vhUfLhnqsiQ1vkQwMRq1hSMprWvzSlrMmiIZjk5tShuTcBvnqyM3sXMWlVGpfCD+xSU2tEBAiEGFWBxGpE9Vu4lsQBkwWS7m9e70+/YgqGILt1k9fD/ZqCM3aDL+yRbcoSYWtEbrTU5INR33pxFFnEpEDRlPrVjuuS3R7t/QlCtZLhg+cjskmU/sWkXy7UM0omj2nCz1jDF2VCJCWzj6vjDwezoVrlTqazr9zGL+6rXF503o4UWPy0pEv1xfwUgprlazlGfkx4vduj6/tbfAtrTRgToxan4UAAAAIXRSTlMA/RC++/4EAfwC8p0mZFXLQOY2ge0aRqxvkNXeL3i4yMOee82qAAAgAElEQVR42uyYfUwb9xnHbcevvDXhNdBAeod9f+C6HDl8wZbnYDNc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" alt="น้องลูกเจี๊ยบ CJX" style="width:46px;height:46px;flex:0 0 auto;display:block;">
+      <div>
+        <div class="brand">CJX · New Store · Pack GO Builder</div>
+        <h1 style="margin:0;">Pack GO Builder</h1>
+      </div>
+    </div>
+    <div class="sub">กรอกครั้งเดียว ระบบคำนวณวันติดตั้ง/รื้อถอน สรุปจำนวนป้าย และประกอบเป็นเอกสารให้อัตโนมัติ</div>
+  </header>
+
+  <div id="savedRow"></div>
+  <div id="autosaveIndicator" style="font-size:12px; color:var(--muted); margin-bottom:10px; transition:opacity .3s; opacity:0.45;">พร้อมบันทึกอัตโนมัติ — เริ่มกรอกได้เลย</div>
+
+  <!-- STEP 1: BRANCH INFO -->
+  <div class="step-label"><div class="step-num">1</div><h2>ข้อมูลสาขา</h2><span class="note">หน้าปก + ข้อมูลของสาขา</span></div>
+  <div class="card">
+    <label>🔍 ค้นหาสาขาจากรายชื่อ — เลือกแล้วเติมข้อมูลให้อัตโนมัติ</label>
+    <div style="position:relative; margin-bottom:14px;">
+      <input type="text" id="branchSearch" placeholder="พิมพ์ชื่อสาขา หรือรหัส เช่น CJX00115 / คอนโดศรีเมือง" oninput="renderBranchSuggestions(this.value)" autocomplete="off">
+      <div id="branchSuggestions" style="position:absolute; z-index:20; left:0; right:0; top:100%; background:#fff; border:1px solid var(--line); border-radius:8px; max-height:280px; overflow-y:auto; display:none; box-shadow:0 6px 18px rgba(0,0,0,.08);"></div>
+    </div>
+    <div class="row">
+      <div><label>ชื่อสาขา</label><input type="text" id="branchName" placeholder="เช่น คอนโดศรีเมือง ซอย2" oninput="renderAll()" onblur="checkExistingDraftWarning()"></div>
+      <div><label>รหัสสาขา</label><input type="text" id="branchCode" placeholder="เช่น CJX00115" oninput="renderAll()" onblur="checkExistingDraftWarning()"></div>
+      <div><label>จังหวัด</label><input type="text" id="province" placeholder="เช่น ระยอง" oninput="renderAll()"></div>
+    </div>
+    <div class="row">
+      <div><label>ที่อยู่สาขา (ต./อ./จ.)</label><input type="text" id="address" placeholder="ต.เชิงเนิน อ.เมือง จ.ระยอง" oninput="scheduleAutosave()"></div>
+      <div><label>พิกัดสาขา (จาก Google Maps)</label><input type="text" id="coords" placeholder="12°40'28.7&quot;N 101°16'19.7&quot;E" oninput="scheduleAutosave()"></div>
+      <div><label>ลิงก์ Google Maps</label><input type="text" id="mapLink" placeholder="https://maps.app.goo.gl/..." oninput="scheduleAutosave()"></div>
+    </div>
+    <div class="row">
+      <div><label>ผู้รับผิดชอบสาขา</label>
+        <select id="responsible" onchange="scheduleAutosave()">
+          <option value="">- เลือก -</option>
+          <option value="ปิยพงษ์ พินอยู่วงษ์ (ติ) 099-037-5677">ปิยพงษ์ พินอยู่วงษ์ (ติ)</option>
+          <option value="จิรนันท์ สงแพง (อุ๋มอิ๋ม) 080-518-8552">จิรนันท์ สงแพง (อุ๋มอิ๋ม)</option>
+          <option value="วันวิเศษณ์ วิเศษโกสินทร์ (เมา) 080-996-6517">วันวิเศษณ์ วิเศษโกสินทร์ (เมา)</option>
+          <option value="อุกฤษฏ์ โคกโต (หนุ่ย) 091-029-4637">อุกฤษฏ์ โคกโต (หนุ่ย)</option>
+        </select>
+      </div>
+      <div><label>ทีมกิจกรรมที่รับผิดชอบ</label>
+        <div class="row" style="gap:8px; margin-bottom:0;">
+          <select id="teamSMA" style="margin-bottom:0;" onchange="syncActivityTeam()"></select>
+          <input type="text" id="teamLeader" placeholder="ชื่อหัวหน้าทีม" style="margin-bottom:0;" oninput="syncActivityTeam()">
+        </div>
+      </div>
+      <div><label>แนะนำเวลาเปิด-ปิดร้าน</label>
+        <div class="row" style="gap:6px; margin-bottom:0; flex-wrap:wrap;">
+          <select id="openHH" style="margin-bottom:0; width:auto;" onchange="syncStoreHours()"></select>
+          <select id="openMM" style="margin-bottom:0; width:auto;" onchange="syncStoreHours()"></select>
+          <span style="align-self:center;">–</span>
+          <select id="closeHH" style="margin-bottom:0; width:auto;" onchange="syncStoreHours()"></select>
+          <select id="closeMM" style="margin-bottom:0; width:auto;" onchange="syncStoreHours()"></select>
+        </div>
+      </div>
+      <input type="hidden" id="activityTeam">
+      <input type="hidden" id="openTimeStore">
+      <input type="hidden" id="closeTimeStore">
+      <input type="hidden" id="storeHours">
+    </div>
+    <div class="row">
+      <div><label>วันเปิดสาขา (วันแรก)</label><input type="date" id="openStart" onchange="renderAll()"></div>
+      <div><label>วันเปิดสาขา (วันสุดท้าย) — ปกติ +4 วัน</label><input type="date" id="openEnd" onchange="renderAll()"></div>
+    </div>
+    <div class="readout" id="dateReadout">กรอกวันเปิดสาขาเพื่อคำนวณวันติดตั้ง/รื้อถอนอัตโนมัติ <span class="auto-badge">auto</span></div>
+  </div>
+
+  <!-- STEP 2: ZONE / CUSTOMER GROUPS -->
+  <div class="step-label"><div class="step-num">2</div><h2>แบ่งโซนประชาสัมพันธ์</h2><span class="note">ไม่ต้องกรอก — แค่แปะรูปในไฟล์ PPT ทีหลัง</span></div>
+  <div class="card">
+    <div class="hint">สไลด์นี้ในไฟล์ PPT จะมีแค่หัวข้อ "2. แบ่งโซนประชาสัมพันธ์" กับกรอบว่างให้แปะภาพแผนที่แบ่งโซนจาก SA เอง — ไม่ต้องกรอกอะไรในเครื่องมือนี้</div>
+  </div>
+
+  <!-- STEP 3: PR PLAN -->
+  <div class="step-label"><div class="step-num">3</div><h2>แผนงานประชาสัมพันธ์ก่อนเปิดสาขา</h2><span class="note">Template คงที่ <span class="auto-badge">auto</span></span></div>
+  <div class="card">
+    <div class="readout" id="prPlanPreview">กรอกจุดติดป้าย (Step 5) เพื่อให้ระบบเติมจำนวนป้ายในแผนอัตโนมัติ</div>
+  </div>
+
+  <!-- STEP 4: DAY-BY-DAY SCHEDULE -->
+  <div class="step-label"><div class="step-num">4</div><h2>ตารางแผนงานประชาสัมพันธ์รายวัน</h2><span class="note">เลือกจำนวนวันที่เข้าสาขา</span></div>
+  <div class="card">
+    <div class="row" style="align-items:flex-end;">
+      <div>
+        <label>เข้าสาขาก่อนเปิดกี่วัน</label>
+        <select id="numDays" onchange="rebuildDays()">
+          <option value="1">D-1 (1 วัน)</option>
+          <option value="2" selected>D-2, D-1 (2 วัน)</option>
+          <option value="3">D-3, D-2, D-1 (3 วัน)</option>
+          <option value="4">D-4 ถึง D-1 (4 วัน)</option>
+        </select>
+      </div>
+    </div>
+    <div id="daysContainer"></div>
+  </div>
+
+  <!-- STEP 5: SIGNAGE POINTS -->
+  <div class="step-label"><div class="step-num">5</div><h2>จุดติดป้าย</h2><span class="note">รูปจริงต้องแนบเอง ระบบช่วยนับ+สรุป</span></div>
+  <div class="card">
+    <div id="signageContainer"></div>
+    <button class="secondary" onclick="addSignage()">+ เพิ่มจุดติดป้าย</button>
+  </div>
+
+  <!-- STEP 6: ACTIVITY + HELP CHECKLIST -->
+  <div class="step-label"><div class="step-num">6</div><h2>กิจกรรมหน้าร้าน + ขอความช่วยเหลือ</h2></div>
+  <div class="card">
+    <label>รายละเอียดกิจกรรม (เขียนใหม่ทุกสาขา)</label>
+    <textarea id="activityDetail" placeholder="ขายสินค้า Clearance, ซื้อครบ 300 บาทแจกแก้ว, ..." oninput="scheduleAutosave()"></textarea>
+
+    <label>ผัง Layout กิจกรรม (ไม่บังคับ)</label>
+    <div class="hint" style="margin-top:-4px; margin-bottom:8px;">แนบรูปผังงาน แล้วปักจุดสัญลักษณ์ (จุดกลม/ดาว/หัวใจ/สี่เหลี่ยม/สามเหลี่ยม สีใดก็ได้) พร้อมพิมพ์อธิบายความหมายแต่ละจุด — จะรวมกับ "รายละเอียดกิจกรรม" และ "ขอความช่วยเหลือ" ในสไลด์เดียวกันตอนสร้าง PPT</div>
+    <div id="activityLayoutBox" style="margin-bottom:14px;"></div>
+
+    <label>ขอความช่วยเหลือ (แก้ไข/เพิ่มได้)</label>
+    <div id="helpContainer"></div>
+    <button class="ghost small" onclick="addHelpItem('', '')">+ เพิ่มรายการ</button>
+  </div>
+
+  <!-- STEP 7: HOTEL / ACCOMMODATION -->
+  <div class="step-label"><div class="step-num">7</div><h2>โรงแรม / ที่พัก</h2><span class="note">สำหรับทีมที่พักค้างระหว่างเข้าสาขา</span></div>
+  <div class="card">
+    <div id="hotelContainer"></div>
+    <button class="secondary" onclick="addHotel()">+ เพิ่มโรงแรม/ที่พัก</button>
+  </div>
+
+  <!-- STEP 8: EMPLOYEE PARKING -->
+  <div class="step-label"><div class="step-num">8</div><h2>ที่จอดรถสำหรับพนักงาน</h2><span class="note">ไม่บังคับ — กรอกถ้ามี</span></div>
+  <div class="card">
+    <div id="parkingContainer"></div>
+    <button class="secondary" onclick="addParking()">+ เพิ่มที่จอดรถ</button>
+  </div>
+
+  <!-- STEP 9: SUMMARY -->
+  <div class="step-label"><div class="step-num">9</div><h2>สรุปสำหรับ MKT + จัดซื้อ</h2><span class="note">รวมป้ายอัตโนมัติจาก Step 5</span></div>
+  <div class="card">
+    <div class="row">
+      <div><label>ต้องการ Artwork ภายในวันที่</label><input type="date" id="artworkDeadline" onchange="scheduleAutosave()"></div>
+      <div><label>ซัพป้ายที่แนะนำ</label><input type="text" id="purchasingContact" placeholder="(หากมี)" oninput="scheduleAutosave()"></div>
+      <div><label>ซัพอื่นๆที่แนะนำ เช่น ซัพไฟ ซัพเต็นท์</label><input type="text" id="otherSuppliers" placeholder="(หากมี)" oninput="scheduleAutosave()"></div>
+    </div>
+    <div id="signageSummaryTable"></div>
+  </div>
+
+  <div class="btn-row" style="margin:20px 0;">
+    <button id="pptxBtn" onclick="openPackGoSlides()">📊 สร้างสไลด์ Pack GO (Google Slides)</button>
+    <button onclick="generateFinal()">📄 สร้างเอกสารสรุป Pack GO</button>
+    <button class="secondary" onclick="exportJSON()">🗂️ Export JSON (ส่งให้ AI ทำไฟล์ PPT จริง)</button>
+    <button class="ghost" onclick="toggleImportBox()">📥 Import JSON (นำเข้าข้อมูลที่เคย Export ไว้)</button>
+    <button class="ghost" onclick="saveSession()">💾 บันทึกสาขานี้ทันที (สำรอง — ระบบ auto-save ให้อยู่แล้ว)</button>
+    <button class="danger" onclick="clearAll()">ล้างข้อมูลทั้งหมด</button>
+  </div>
+
+  <div id="importBox" class="hidden card">
+    <div class="hint" style="margin-bottom:8px;">วาง JSON ที่เคย Export ไว้ก่อนหน้า (เก็บไว้ใน Notes/ไลน์ส่งตัวเอง ฯลฯ) เพื่อดึงข้อมูลกลับมาทำต่อ — ใช้ได้เสมอไม่ว่าจะเปิดเครื่องมือนี้ผ่านที่ไหนก็ตาม</div>
+    <textarea id="importText" placeholder="วาง JSON ตรงนี้..."></textarea>
+    <button onclick="importJSON()">โหลดข้อมูลกลับเข้ามา</button>
+  </div>
+
+  <div id="jsonSection" class="hidden">
+    <div class="final-box">
+      <h3 style="margin-top:0;">JSON สำหรับส่งให้ AI สร้างไฟล์ PPT</h3>
+      <div class="hint">คัดลอกทั้งหมดนี้ ไปวางในแชทกับ Claude พร้อมบอกว่า "สร้าง Pack GO PPT จากข้อมูลนี้" — Claude จะสร้างไฟล์ .pptx จริงให้ (เว้นช่องแนบรูปที่ถ่ายมาเอง) — <b>แนะนำให้เก็บ JSON นี้ไว้ที่อื่นด้วย</b> (Notes/ไลน์ส่งตัวเอง) เผื่อใช้ปุ่ม Import JSON กลับมาทำต่อทีหลัง</div>
+      <pre class="final-text" id="jsonText"></pre>
+      <button style="margin-top:10px;" onclick="copyJSON()">📋 คัดลอก JSON</button>
+    </div>
+  </div>
+
+  <div id="finalSection" class="hidden">
+    <div class="final-box">
+      <h3 style="margin-top:0;">เอกสารสรุป Pack GO — <span id="finalBranchName"></span></h3>
+      <div class="hint">คัดลอกไปวางใน PPT หรือส่งต่อทีม MKT/จัดซื้อได้เลย</div>
+      <pre class="final-text" id="finalText"></pre>
+      <button style="margin-top:10px;" onclick="copyFinal()">📋 คัดลอกข้อความ</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Marker Composer Modal (drag & scale an auto-shape marker over the location photo — no file upload needed) -->
+<div id="designComposerOverlay" class="composer-overlay hidden">
+  <div class="composer-box">
+    <div class="composer-header">
+      <h3>ปักตำแหน่งป้ายบนรูป</h3>
+      <button class="ghost small" type="button" onclick="closeDesignComposer()">✕ ปิด</button>
+    </div>
+    <div class="hint" style="margin-bottom:8px;">ถ้าจุดนี้มีหลายป้าย จะเห็นทุกป้ายพร้อมกัน — ลากป้ายไหนก็ได้ตรงไปตรงตำแหน่งที่จะติดตั้งจริง กดที่ป้ายเพื่อเลือกแล้วใช้แถบเลื่อนปรับขนาด</div>
+    <div class="composer-stage" id="composerStage">
+      <img id="composerBg" class="bg" alt="รูปสถานที่">
+      <div id="composerMarkers"></div>
+    </div>
+    <div class="composer-controls">
+      <div class="row-inline">
+        <label style="margin:0; white-space:nowrap;">ขนาด (ป้ายที่ <span id="composerActiveUnitLabel">1</span>)</label>
+        <input type="range" id="designScaleSlider" min="5" max="60" value="18" oninput="onDesignScaleChange(this.value)">
+      </div>
+      <div class="row-inline" style="justify-content:flex-end;">
+        <button class="ghost" type="button" onclick="closeDesignComposer()">ยกเลิก</button>
+        <button class="secondary" type="button" onclick="saveDesignComposer()">✅ บันทึก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Activity Layout Marker Composer Modal (click to add a colored symbol marker + legend text) -->
+<div id="layoutComposerOverlay" class="composer-overlay hidden">
+  <div class="composer-box">
+    <div class="composer-header">
+      <h3>ปักจุดบนผัง Layout</h3>
+      <button class="ghost small" type="button" onclick="closeLayoutComposer()">✕ เสร็จแล้ว</button>
+    </div>
+    <div class="hint" style="margin-bottom:8px;">คลิก/แตะบนรูปเพื่อเพิ่มจุดใหม่ตรงตำแหน่งนั้น — ลากจุดที่มีอยู่เพื่อย้ายตำแหน่ง แล้วพิมพ์อธิบายความหมายแต่ละจุดด้านล่าง</div>
+    <div class="composer-stage" id="layoutComposerStage" style="cursor:crosshair;">
+      <img id="layoutComposerBg" class="bg" alt="ผัง Layout">
+    </div>
+    <div class="composer-controls">
+      <div id="layoutMarkerList"></div>
+      <button class="ghost small" type="button" onclick="addLayoutMarkerAtCenter()">+ เพิ่มจุด (กลางรูป)</button>
+      <div class="row-inline" style="justify-content:flex-end;">
+        <button class="secondary" type="button" onclick="closeLayoutComposer()">✅ เสร็จแล้ว</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let BRANCH_MASTER = [];
+// ป้องกันข้อมูลจุดติดป้ายหาย: เก็บสถานะว่า session นี้โหลดสาขาไหนมาแล้วบ้าง (currentLoadedBranchKey)
+// เทียบกับรายชื่อสาขาที่มีข้อมูลบันทึกไว้แล้วในระบบ (SAVED_DRAFT_NAMES) — ถ้าพิมพ์/เลือกชื่อสาขาที่ซ้ำ
+// กับของเดิมโดยที่ session นี้ยังไม่เคยโหลดมาก่อน จะเตือนกันเผลอเซฟทับ (ดู checkExistingDraftWarning)
+let SAVED_DRAFT_NAMES = [];
+let currentLoadedBranchKey = '';
+let dismissedDuplicateWarningFor = '';
+// เก็บจำนวนจุดติดป้ายล่าสุดที่รู้ว่าถูกต้อง (ตอนโหลด/เซฟสำเร็จ) ไว้เทียบตอนจะเซฟรอบถัดไป —
+// ถ้าจู่ๆ จะเซฟจุดติดป้ายเป็นศูนย์ทั้งที่เมื่อกี้ยังมีอยู่ ให้เบรกแล้วถามยืนยันก่อน กัน autosave ทับข้อมูลหายแบบเงียบๆ
+let lastKnownSignageCount = null;
+const signages = [];
+const helpItems = [];
+let dayPlans = [];
+const hotels = [];
+const parkings = [];
+let activityLayout = { photo: '', markers: [], slideLayout: 'top' };
+
+// ==================== สถานะบันทึกรูปขึ้นเซิร์ฟเวอร์ (แสดงเป็นป้ายติดที่รูปแทน popup) ====================
+// เก็บแยกจากข้อมูลจริง (ไม่ปนไปกับ signages/hotels/... ที่ export/autosave) — คีย์เดียวกับที่ใช้เรียก
+// savePhotoToSheet (เช่น signageId+'::'+unitIdx, 'hotel::'+id) ค่าเป็น 'saving' | 'ok' | 'failed'
+// ไม่มีคีย์ = ยังไม่เคยพยายามบันทึก/ไม่มีรูป -> ไม่ต้องโชว์อะไร
+const photoSaveStatus = {};
+function photoStatusBadgeHtml_(ownerId, retryCall){
+  return photoStatusBadgeForStatus_(photoSaveStatus[ownerId], retryCall);
+}
+function photoStatusBadgeForStatus_(st, retryCall){
+  if(st === 'saving') return '<div style="margin-top:6px;font-size:12px;color:#8a6d00;">⏳ กำลังบันทึกรูปขึ้นเซิร์ฟเวอร์...</div>';
+  if(st === 'failed') return '<div style="margin-top:6px;font-size:12px;color:#b00020;cursor:pointer;text-decoration:underline;" onclick="' + retryCall + '">⚠ บันทึกรูปนี้ไม่สำเร็จ (เช็คสัญญาณเน็ต) — กดตรงนี้เพื่อลองใหม่</div>';
+  if(st === 'ok') return '<div style="margin-top:6px;font-size:12px;color:#1a7d3a;">✅ บันทึกรูปขึ้นเซิร์ฟเวอร์แล้ว</div>';
+  return '';
+}
+
+// ==================== พรีวิวรูปแบบเต็มจอ (กดที่รูปย่อเพื่อดูรูปใหญ่) ====================
+function previewPhoto(src){
+  if(!src) return;
+  let overlay = document.getElementById('photoPreviewOverlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'photoPreviewOverlay';
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:9999; align-items:center; justify-content:center; padding:24px; cursor:zoom-out;';
+    overlay.onclick = () => { overlay.style.display = 'none'; };
+    const img = document.createElement('img');
+    img.id = 'photoPreviewImg';
+    img.style.cssText = 'max-width:100%; max-height:100%; border-radius:8px; box-shadow:0 8px 32px rgba(0,0,0,.5);';
+    overlay.appendChild(img);
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('photoPreviewImg').src = src;
+  overlay.style.display = 'flex';
+}
+
+const SIGNAGE_TYPES = [
+  {label:"ป้ายกองโจร 1.2x2.4 ม.", key:"guerrilla"},
+  {label:"ป้าย 1x1 ม.", key:"square"},
+  {label:"แบนเนอร์ 3x1 ม.", key:"banner"},
+];
+
+const DEFAULT_HELP = [
+  ["พนักงานยืนเครื่อง POS หน้าสาขา", "1 คน"],
+  ["พนักงานยืนเครื่อง POS จุด Clearance", "1 คน"],
+  ["คนเฝ้าเต็นท์ช่วงกลางคืน", "2 คืน"],
+  ["ลังกระดาษ/ตะกร้าวางสินค้า Clearance", "100 ใบ"]
+];
+
+function fmtDate(d){
+  if(!d) return "-";
+  const parts = d.split("-").map(Number);
+  const dt = new Date(Date.UTC(parts[0], parts[1]-1, parts[2]));
+  const days = ["อา","จ","อ","พ","พฤ","ศ","ส"];
+  return `${dt.getUTCDate()}/${dt.getUTCMonth()+1}/${dt.getUTCFullYear()} (${days[dt.getUTCDay()]})`;
+}
+function addDays(dateStr, n){
+  const parts = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(parts[0], parts[1]-1, parts[2]));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth()+1).padStart(2,"0");
+  const dd = String(dt.getUTCDate()).padStart(2,"0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function renderAll(){
+  const start = document.getElementById('openStart').value;
+  const end = document.getElementById('openEnd').value;
+  const box = document.getElementById('dateReadout');
+  if(!start){
+    box.innerHTML = 'กรอกวันเปิดสาขาเพื่อคำนวณวันติดตั้ง/รื้อถอนอัตโนมัติ <span class="auto-badge">auto</span>';
+    scheduleAutosave();
+    return;
+  }
+  const install = addDays(start, -7);
+  const removal = addDays(start, 5);
+  box.innerHTML = `<b>ติดตั้งป้าย:</b> ${fmtDate(install)} (D-7) &nbsp;|&nbsp; <b>รื้อถอน:</b> ${fmtDate(removal)} (Day 6) <span class="auto-badge">auto</span>`;
+  renderPrPlan();
+  scheduleAutosave();
+}
+
+function renderBranchSuggestions(query){
+  const box = document.getElementById('branchSuggestions');
+  query = (query||'').trim().toLowerCase();
+  if(!query){ box.style.display='none'; box.innerHTML=''; return; }
+  const matches = [];
+  BRANCH_MASTER.forEach((b, idx) => {
+    if(b.name.toLowerCase().includes(query) || b.code.toLowerCase().includes(query) || b.province.toLowerCase().includes(query)){
+      matches.push({ ...b, _idx: idx });
+    }
+  });
+  const shown = matches.slice(0, 20);
+  if(shown.length === 0){
+    box.innerHTML = '<div style="padding:10px 12px; font-size:12.5px; color:var(--muted);">ไม่พบสาขาที่ตรงกับคำค้นหา</div>';
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = shown.map((b) => {
+    const codeLabel = (b.code && b.code.trim() && b.code.trim() !== '-') ? b.code : 'ไม่มีรหัส';
+    return `
+    <div style="padding:9px 12px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--line);" 
+         onmouseover="this.style.background='#F5F2ED'" onmouseout="this.style.background='#fff'"
+         onclick="pickBranch(${b._idx})">
+      <b>${b.name}</b> <span style="color:var(--muted); font-size:11.5px;">${codeLabel} · ${b.province}${b.openDate ? ' · เปิด ' + b.openDate : ''}${b.status ? ' · ' + b.status : ''}</span>
+    </div>
+  `;
+  }).join('');
+  box.style.display = 'block';
+}
+
+function pickBranch(idx){
+  const b = BRANCH_MASTER[idx];
+  if(!b) return;
+  const hasCode = b.code && b.code.trim() && b.code.trim() !== '-';
+  document.getElementById('branchName').value = b.name || '';
+  document.getElementById('branchCode').value = hasCode ? b.code : 'ไม่มีรหัส';
+  document.getElementById('province').value = b.province || '';
+  document.getElementById('address').value = b.address || '';
+  document.getElementById('coords').value = b.coords || '';
+  document.getElementById('mapLink').value = b.mapLink || '';
+  if(b.openDate){
+    document.getElementById('openStart').value = b.openDate;
+    document.getElementById('openEnd').value = addDays(b.openDate, 4);
+  }
+  document.getElementById('branchSearch').value = `${b.name} (${hasCode ? b.code : 'ไม่มีรหัส'})`;
+  document.getElementById('branchSuggestions').style.display = 'none';
+  renderAll();
+  checkExistingDraftWarning(); // เลือกสาขาจากการค้นหา ก็ต้องเช็คว่ามีข้อมูลเดิมอยู่แล้วมั้ยเหมือนกัน
+}
+
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('#branchSearch') && !e.target.closest('#branchSuggestions')){
+    document.getElementById('branchSuggestions').style.display = 'none';
+  }
+});
+
+// ---------- Day schedule ----------
+function rebuildDays(){
+  const n = parseInt(document.getElementById('numDays').value);
+  dayPlans = [];
+  for(let i=n; i>=1; i--){
+    dayPlans.push({label: `D-${i}`, rows: [{timeStart:'', timeEnd:'', detail:'', manpower:'', flyers:'', lat:'', lng:''}]});
+  }
+  renderDays();
+}
+function addRow(dayIdx){
+  dayPlans[dayIdx].rows.push({timeStart:'', timeEnd:'', detail:'', manpower:'', flyers:'', lat:'', lng:''});
+  renderDays();
+  scheduleAutosave();
+}
+function removeRow(dayIdx, rowIdx){
+  dayPlans[dayIdx].rows.splice(rowIdx,1);
+  renderDays();
+  scheduleAutosave();
+}
+function updateRow(dayIdx, rowIdx, field, value){
+  dayPlans[dayIdx].rows[rowIdx][field] = value;
+  scheduleAutosave();
+}
+// ---------- Easy-to-read Thai time picker (hour/minute selects instead of native AM/PM time input) ----------
+function thaiHourLabel(h){
+  h = parseInt(h,10);
+  if(isNaN(h)) return '';
+  if(h===0) return 'เที่ยงคืน';
+  if(h>=1 && h<=5) return 'ตี'+h;
+  if(h>=6 && h<=11) return h+' โมง';
+  if(h===12) return 'เที่ยง';
+  if(h===13) return 'บ่ายโมง';
+  if(h>=14 && h<=15) return 'บ่าย '+(h-12)+' โมง';
+  if(h>=16 && h<=18) return (h-12)+' โมงเย็น';
+  if(h>=19 && h<=23) return (h-18)+' ทุ่ม';
+  return h+':00';
+}
+function timeHourOptions(selectedHH){
+  let html = '<option value="">--</option>';
+  for(let h=0; h<24; h++){
+    const hh = String(h).padStart(2,'0');
+    html += `<option value="${hh}" ${selectedHH===hh?'selected':''}>${hh} น. (${thaiHourLabel(h)})</option>`;
+  }
+  return html;
+}
+function timeMinuteOptions(selectedMM){
+  let html = '<option value="">--</option>';
+  for(let m=0; m<60; m+=5){
+    const mm = String(m).padStart(2,'0');
+    html += `<option value="${mm}" ${selectedMM===mm?'selected':''}>:${mm}</option>`;
+  }
+  return html;
+}
+function updateRowTime(dayIdx, rowIdx, field, part, value){
+  const cur = (dayPlans[dayIdx].rows[rowIdx][field] || '').split(':');
+  let hh = cur[0] || '', mm = cur[1] || '';
+  if(part==='hour') hh = value; else mm = value;
+  const combined = (hh && mm) ? (hh+':'+mm) : '';
+  dayPlans[dayIdx].rows[rowIdx][field] = combined;
+  renderDays();
+  scheduleAutosave();
+}
+// ---------- Coordinate paste helper: accepts "lat, lng" text or a pasted Google Maps link and extracts the pair ----------
+function parseCoordsText(text){
+  if(!text) return null;
+  text = ('' + text).trim();
+  // Degrees-Minutes-Seconds format, e.g. 13°21'25.2"N 99°56'12.6"E
+  // (what Google Maps shows when you long-press a spot and copy the coordinates)
+  const dms = text.match(/(\d{1,3})\s*°\s*(\d{1,2})\s*'\s*([\d.]+)\s*"?\s*([NSns])[\s,]+(\d{1,3})\s*°\s*(\d{1,2})\s*'\s*([\d.]+)\s*"?\s*([EWew])/);
+  if(dms){
+    const toDec = (d,mm,s,dir) => {
+      let v = parseInt(d,10) + parseInt(mm,10)/60 + parseFloat(s)/3600;
+      if(/[SWsw]/.test(dir)) v = -v;
+      return v;
+    };
+    const latD = toDec(dms[1],dms[2],dms[3],dms[4]);
+    const lngD = toDec(dms[5],dms[6],dms[7],dms[8]);
+    if(Math.abs(latD) <= 90 && Math.abs(lngD) <= 180) return { lat: latD, lng: lngD };
+  }
+  let m = text.match(/@(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/)
+       || text.match(/[?&](?:q|ll|query)=(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/)
+       || text.match(/^(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/)
+       // เผื่อวางมาทั้งข้อความ/หลายบรรทัด (เช่น แชร์ตำแหน่งจาก LINE ที่มีชื่อสถานที่/ข้อความอื่นปนมาด้วย
+       // ไม่ใช่แค่ "lat, lng" เปล่าๆ) — หาคู่ตัวเลขทศนิยมแบบพิกัดจริง (≥4 หลัก ตามความละเอียด GPS) ที่ไหนก็ได้ในข้อความ
+       || text.match(/(-?\d{1,3}\.\d{4,})\s*,\s*(-?\d{1,3}\.\d{4,})/);
+  if(!m) return null;
+  const lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+  if(isNaN(lat) || isNaN(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+// เรียกตอนวางข้อความแล้วแยกพิกัดไม่ออก — เดิมจะเงียบและปล่อยให้ช่องพิกัดโชว์ข้อความที่วางดิบๆ
+// ไปเลยโดยพิกัดจริง (lat/lng) ไม่ได้ถูกบันทึก ทำให้ดูเหมือนกรอกสำเร็จทั้งที่จริงๆ ยังไม่มีพิกัดอยู่ดี
+function warnCoordsPasteFailed(){
+  alert('อ่านพิกัดจากข้อความที่วางไม่ออกค่ะ — พิกัดจุดนี้ยังไม่ถูกบันทึกนะคะ\nลองวางใหม่เป็นตัวเลขพิกัดตรงๆ เช่น 13.756331, 100.501765 หรือวางลิงก์ Google Maps แบบเต็ม (ไม่ใช่ลิงก์ย่อ maps.app.goo.gl)');
+}
+// เรียกหลังได้พิกัดจาก GPS มา — ถ้าความแม่นยำแย่ (มักเกิดในตึก/หลังคาบัง/สัญญาณอ่อน) แจ้งเตือนทันที
+// เพราะแอปไม่เคยโชว์ค่าความแม่นยำนี้ให้เห็นมาก่อน คนหน้างานเลยไม่รู้ว่าจุดที่ปักอาจจะเพี้ยนไปหลายสิบ-หลายร้อยเมตร
+function warnIfGpsAccuracyPoor(accuracyMeters){
+  if(accuracyMeters != null && accuracyMeters > 50){
+    alert('ตำแหน่ง GPS ที่ได้ ความแม่นยำอยู่ที่ประมาณ ±' + Math.round(accuracyMeters) + ' เมตร (ค่อนข้างต่ำ)\nอาจเกิดจากอยู่ในที่บัง/สัญญาณอ่อน ลองออกไปที่โล่งแล้วกดปักใหม่ หรือเช็คพิกัดเทียบกับแผนที่อีกทีนะคะ');
+  }
+}
+function handleRowCoordsPaste(ev, dayIdx, rowIdx){
+  const text = (ev.clipboardData || window.clipboardData).getData('text');
+  const parsed = parseCoordsText(text);
+  if(parsed){
+    ev.preventDefault();
+    dayPlans[dayIdx].rows[rowIdx].lat = parsed.lat.toFixed(6);
+    dayPlans[dayIdx].rows[rowIdx].lng = parsed.lng.toFixed(6);
+    renderDays();
+    scheduleAutosave();
+  } else {
+    warnCoordsPasteFailed();
+  }
+}
+function useGPSForRow(dayIdx, rowIdx){
+  if(!navigator.geolocation){ alert('เบราว์เซอร์นี้ไม่รองรับ GPS'); return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      dayPlans[dayIdx].rows[rowIdx].lat = pos.coords.latitude.toFixed(6);
+      dayPlans[dayIdx].rows[rowIdx].lng = pos.coords.longitude.toFixed(6);
+      renderDays();
+      scheduleAutosave();
+      warnIfGpsAccuracyPoor(pos.coords.accuracy);
+    },
+    (err) => { alert('ขอตำแหน่งไม่สำเร็จ: ' + err.message); },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+function rowCoordsDisplay(row){
+  return (row.lat && row.lng) ? (row.lat + ', ' + row.lng) : (row.lat || row.lng || '');
+}
+// ช่องพิกัดรวม (lat, long ในช่องเดียว) — พิมพ์ครบคู่แล้วค่อยแยกเก็บ ระหว่างพิมพ์ยังไม่ครบคู่ไม่ต้องทับพิกัดเดิม
+function updateRowCoords(dayIdx, rowIdx, value){
+  const parsed = parseCoordsText(value);
+  if(parsed){
+    dayPlans[dayIdx].rows[rowIdx].lat = parsed.lat.toFixed(6);
+    dayPlans[dayIdx].rows[rowIdx].lng = parsed.lng.toFixed(6);
+  } else if(!value.trim()){
+    dayPlans[dayIdx].rows[rowIdx].lat = '';
+    dayPlans[dayIdx].rows[rowIdx].lng = '';
+  }
+  scheduleAutosave();
+}
+function rowTimeDisplay(row){
+  return (row.timeStart && row.timeEnd) ? `${row.timeStart}-${row.timeEnd}` : (row.timeStart || row.timeEnd || '');
+}
+function rowFlyersDisplay(row){
+  const v = (row.flyers||'').toString().trim();
+  if(!v) return '';
+  return /^\d+$/.test(v) ? v + ' ใบ' : v;
+}
+function renderDays(){
+  const container = document.getElementById('daysContainer');
+  container.innerHTML = '';
+  dayPlans.forEach((day, dayIdx) => {
+    const div = document.createElement('div');
+    div.className = 'day-block';
+    let html = `<div class="hint" style="margin-bottom:6px;">พิกัด: พิมพ์เองได้เลย หรือวางลิงก์ Google Maps ที่แชร์มาจาก LINE ก็ได้ (รองรับทั้งแบบทศนิยม เช่น 13.357, 99.936 และแบบองศา เช่น 13°21'25.2"N 99°56'12.6"E) ระบบจะแยกพิกัดให้อัตโนมัติ</div><h3>แผนงาน ${day.label}</h3><div style="overflow-x:auto;"><table style="min-width:900px;"><tr><th style="width:270px;">เวลา (เริ่ม–จบ)</th><th>รายละเอียด</th><th style="width:65px;">กำลังคน</th><th style="width:75px;">ใบปลิว</th><th style="width:170px;">พิกัด</th><th style="width:36px;"></th><th style="width:36px;"></th></tr>`;
+    day.rows.forEach((row, rowIdx) => {
+      const tsParts = (row.timeStart||'').split(':');
+      const teParts = (row.timeEnd||'').split(':');
+      html += `<tr>
+        <td><div style="display:flex; gap:3px; align-items:center; flex-wrap:wrap;">
+          <select style="margin-bottom:0; width:auto;" onchange="updateRowTime(${dayIdx},${rowIdx},'timeStart','hour',this.value)">${timeHourOptions(tsParts[0]||'')}</select>
+          <select style="margin-bottom:0; width:auto;" onchange="updateRowTime(${dayIdx},${rowIdx},'timeStart','minute',this.value)">${timeMinuteOptions(tsParts[1]||'')}</select>
+          <span>–</span>
+          <select style="margin-bottom:0; width:auto;" onchange="updateRowTime(${dayIdx},${rowIdx},'timeEnd','hour',this.value)">${timeHourOptions(teParts[0]||'')}</select>
+          <select style="margin-bottom:0; width:auto;" onchange="updateRowTime(${dayIdx},${rowIdx},'timeEnd','minute',this.value)">${timeMinuteOptions(teParts[1]||'')}</select>
+        </div></td>
+        <td><input type="text" value="${row.detail}" placeholder="รายละเอียดกิจกรรม" oninput="updateRow(${dayIdx},${rowIdx},'detail',this.value)"></td>
+        <td><input type="text" value="${row.manpower}" placeholder="4" oninput="updateRow(${dayIdx},${rowIdx},'manpower',this.value)"></td>
+        <td><input type="number" min="0" value="${row.flyers}" placeholder="50" oninput="updateRow(${dayIdx},${rowIdx},'flyers',this.value)"></td>
+        <td><input type="text" value="${rowCoordsDisplay(row)}" placeholder="13.670992, 99.879163" oninput="updateRowCoords(${dayIdx},${rowIdx},this.value)" onblur="renderDays()" onpaste="handleRowCoordsPaste(event,${dayIdx},${rowIdx})"></td>
+        <td><button class="ghost small" type="button" title="ใช้ตำแหน่งปัจจุบัน" onclick="useGPSForRow(${dayIdx},${rowIdx})">📍</button></td>
+        <td><button class="danger small" onclick="removeRow(${dayIdx},${rowIdx})">×</button></td>
+      </tr>`;
+    });
+    html += `</table></div><button class="ghost small" onclick="addRow(${dayIdx})">+ เพิ่มแถว</button>`;
+    div.innerHTML = html;
+    container.appendChild(div);
+  });
+}
+
+// ---------- Signage points ----------
+// ==================== Sign Design Engine (ported from NSA Sign Builder) ====================
+const SIGN_SPECS = {
+  guerrilla: { w:600,  h:1200, label:'ป้ายกองโจร 1.2 x 2.4 ม.' },
+  banner:    { w:1800, h:600,  label:'แบนเนอร์ 3.0 x 1.0 ม.' },
+  square:    { w:800,  h:800,  label:'ป้าย 1 x 1 ม.' }
+};
+const SIGN_C = {
+  green:'#159A45', ray:'#23A94F', dark:'#0B6B2E',
+  white:'#FFFFFF', red:'#E1251B', yellow:'#FFD200',
+  baoDark:'#2A160D', baoMid:'#7A3E17', baoGlow:'#B8703A', cream:'#F6E6CF'
+};
+const SIGN_TH_MONTH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const SIGN_ARROWS = [
+  { k:'right',        t:'เลี้ยวขวา',        auto:'เลี้ยวขวา' },
+  { k:'left',         t:'เลี้ยวซ้าย',       auto:'เลี้ยวซ้าย' },
+  { k:'up',           t:'ตรงไป',            auto:'ตรงไป' },
+  { k:'up_right',     t:'ตรงไปเลี้ยวขวา',   auto:'ตรงไป แล้วเลี้ยวขวา' },
+  { k:'up_left',      t:'ตรงไปเลี้ยวซ้าย',  auto:'ตรงไป แล้วเลี้ยวซ้าย' },
+  { k:'arrive_right', t:'ถึงแล้วขวา',       auto:'ถึงแล้ว อยู่ขวามือ' },
+  { k:'arrive_left',  t:'ถึงแล้วซ้าย',      auto:'ถึงแล้ว อยู่ซ้ายมือ' },
+  { k:'uturn',        t:'กลับรถ',           auto:'กลับรถ' },
+  { k:'none',         t:'ไม่ใส่ลูกศร',      auto:'' }
+];
+
+function makeEmptyUnit(){
+  return {
+    typeKey: 'guerrilla',          // ขนาด/ชนิดป้าย ('guerrilla' | 'square' | 'banner') — เลือกแยกต่อป้ายได้ จุดเดียวกันมีคนละไซส์ได้
+    variant: 'announce',           // 'announce' | 'bao' | 'custom'
+    arrow: 'right',
+    showDistance: false,           // opt-in (all variants) to show + bake distance/arrow into the artwork; off by default
+    distance: '1', unit: 'กม.',
+    dirText: '', landmark: '',
+    officialArtImg: '',            // uploaded Bao Cafe artwork (data URL)
+    customLine1: '', customLine2: '', // free-typed text for the 'custom' variant (plain background, MKT finishes the design)
+    detail: '', coords: '',
+    lat: null, lng: null, accuracy: null, gpsTime: null,
+    locationPhoto: '',
+    sx: 0.5, sy: 0.5, sscale: 0.32,
+    signPng: '',                   // generated sign design (cached, at scale 1)
+    photo: '',                     // final composited mockup shown in PPT
+    frame: false                   // true = ปักเสาไฟไม่ได้ ต้องทำโครงค้ำ (เฉพาะป้ายกองโจร 1.2x2.4 ม.)
+  };
+}
+function addSignage(){
+  const id = 's' + Date.now();
+  signages.push({id, qty:1, notes:'', units:[makeEmptyUnit()]});
+  renderSignages();
+  scheduleAutosave();
+}
+function removeSignage(id){
+  const idx = signages.findIndex(s=>s.id===id);
+  if(idx>-1) signages.splice(idx,1);
+  renderSignages();
+  renderAll();
+  renderSignageSummary();
+  scheduleAutosave();
+}
+function updateSignage(id, field, value){
+  const s = signages.find(s=>s.id===id);
+  if(!s) return;
+  if(field === 'qty'){
+    let n = parseInt(value) || 1;
+    if(n < 1) n = 1;
+    s.qty = n;
+    s.units = s.units || [];
+    const src = s.units[0]; // จุดเดียวกัน = พิกัด/รูปเดียวกัน -> ป้ายใหม่ที่เพิ่ม สืบทอดมาจากป้ายแรกอัตโนมัติ (ไซส์ป้ายเลือกแยกเองได้ทีหลัง)
+    while(s.units.length < n){
+      const nu = makeEmptyUnit();
+      if(src){
+        nu.coords = src.coords; nu.lat = src.lat; nu.lng = src.lng; nu.accuracy = src.accuracy; nu.gpsTime = src.gpsTime;
+        nu.locationPhoto = src.locationPhoto; nu.typeKey = src.typeKey;
+      }
+      s.units.push(nu);
+    }
+    while(s.units.length > n) s.units.pop();
+    const newIdx = s.units.length - 1;
+    if(src && src.locationPhoto) recompositeUnit(s.id, newIdx).then(() => { renderSignages(); saveUnitPhotoIfBackend(s.id, newIdx); });
+    renderSignages();
+  } else {
+    s[field] = value;
+  }
+  renderAll();
+  renderSignageSummary();
+  scheduleAutosave();
+}
+function updateSignageUnit(id, unitIdx, field, value){
+  const s = signages.find(s=>s.id===id);
+  if(!s) return;
+  s.units = s.units || [makeEmptyUnit()];
+  if(!s.units[unitIdx]) s.units[unitIdx] = makeEmptyUnit();
+  s.units[unitIdx][field] = value;
+  renderSignageSummary();
+  scheduleAutosave();
+}
+// พิกัด: 1 จุด (signage point) มีพิกัดเดียว ใช้ร่วมกันทุกป้ายในจุดนั้น — เขียนค่าเดียวกันลงทุก unit
+// (ไม่ให้แยกพิกัดต่อป้ายอีกต่อไป ตามที่คุยกันไว้ว่าจุดเดียวกันไม่ควรกรอกซ้ำหลายรอบ)
+function updateSignageCoords(id, value){
+  const s = signages.find(x=>x.id===id);
+  if(!s) return;
+  s.units = s.units && s.units.length ? s.units : [makeEmptyUnit()];
+  const parsed = parseCoordsText(value);
+  s.units.forEach(u => {
+    u.coords = value;
+    if(parsed){ u.lat = parsed.lat; u.lng = parsed.lng; } else { u.lat = null; u.lng = null; }
+  });
+  renderSignageSummary();
+  scheduleAutosave();
+}
+function useGPSForSignage(id){
+  if(!navigator.geolocation){ alert('เบราว์เซอร์นี้ไม่รองรับ GPS'); return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const s = signages.find(x=>x.id===id);
+      if(!s) return;
+      s.units = s.units && s.units.length ? s.units : [makeEmptyUnit()];
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      const accuracy = Math.round(pos.coords.accuracy), gpsTime = new Date().toISOString();
+      const coordsStr = lat.toFixed(6) + ', ' + lng.toFixed(6);
+      s.units.forEach(u => { u.lat = lat; u.lng = lng; u.accuracy = accuracy; u.gpsTime = gpsTime; u.coords = coordsStr; });
+      renderSignages();
+      scheduleAutosave();
+      warnIfGpsAccuracyPoor(pos.coords.accuracy);
+    },
+    (err) => { alert('ขอตำแหน่งไม่สำเร็จ: ' + err.message); },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+// เตือนพิกัดซ้ำระหว่างจุดติดป้าย — เทียบทศนิยม 5 หลัก (~1 เมตร) เทียบเฉพาะจุดติดป้ายด้วยกันเอง
+// (ไม่รวมโรงแรม/ที่จอดรถ) กันเผลอพิมพ์/วางพิกัดผิดจุดตอนกรอกหลายๆ จุดติดกัน
+function roundCoord5_(n){ return Math.round(n*1e5)/1e5; }
+function getPointCoordKey_(s){
+  const u0 = s && s.units && s.units[0];
+  if(!u0 || u0.lat == null || u0.lng == null) return null;
+  return roundCoord5_(u0.lat) + ',' + roundCoord5_(u0.lng);
+}
+function findDuplicateSignagePoint_(list, idx){
+  const key = getPointCoordKey_(list[idx]);
+  if(!key) return null;
+  for(let j=0;j<list.length;j++){
+    if(j===idx) continue;
+    if(getPointCoordKey_(list[j]) === key) return j;
+  }
+  return null;
+}
+function compressImage(file, maxDim, quality){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if(w > h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
+        else if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+function loadImageAsync(src){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+/* ---------- sign engine: text / date helpers (operate on the "active" render context) ---------- */
+// `active` is set right before rendering a specific unit's sign, so the ported
+// drawing code below can stay close to the original (reads `active.*` instead
+// of a single global `state`), which keeps this port low-risk to verify.
+let active = null;
+
+function signFontOf(size, weight){
+  return (weight || 700) + ' ' + Math.round(size) + "px 'Kanit','Prompt',Tahoma,sans-serif";
+}
+function signFitSize(ctx, text, maxW, startSize, weight){
+  let s = startSize;
+  while(s > 8){
+    ctx.font = signFontOf(s, weight);
+    if(ctx.measureText(text).width <= maxW) break;
+    s -= 1;
+  }
+  return s;
+}
+function signRoundRect(ctx, x, y, w, h, r){
+  if(r > w/2) r = w/2;
+  if(r > h/2) r = h/2;
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+function signDayStr(){ const d = active.date || new Date(); return String(d.getDate()); }
+function signMonthYearStr(){ const d = active.date || new Date(); return SIGN_TH_MONTH[d.getMonth()] + ' ' + (d.getFullYear()+543); }
+function signFullDateStr(){ return signDayStr() + ' ' + signMonthYearStr(); }
+function signShortDate(d){ return d.getDate() + ' ' + SIGN_TH_MONTH[d.getMonth()] + ' ' + String((d.getFullYear()+543)).slice(-2); }
+function signDistLabel(){
+  const u = active.u;
+  const d = String(u.distance || '').trim();
+  return d ? (d + ' ' + u.unit) : '';
+}
+function signArrowDef(k){
+  for(let i=0;i<SIGN_ARROWS.length;i++) if(SIGN_ARROWS[i].k === k) return SIGN_ARROWS[i];
+  return SIGN_ARROWS[0];
+}
+function signIsHoriz(k){ return k === 'right' || k === 'left'; }
+function signHasArrow(){
+  const v = active.u.variant;
+  if((v === 'announce' || v === 'bao' || v === 'custom') && active.u.showDistance) return !!active.u.arrow && active.u.arrow !== 'none';
+  return false;
+}
+function signAutoDirText(){
+  const base = signArrowDef(active.u.arrow).auto;
+  if(!base) return '';
+  const d = signDistLabel();
+  if(!d) return base;
+  if(active.u.arrow.indexOf('arrive') === 0) return base;
+  return base + ' อีก ' + d;
+}
+function signCustomDirText(){ return (active.u.dirText && active.u.dirText.trim()) ? active.u.dirText.trim() : ''; }
+function signBottomText(){
+  if(signCustomDirText()) return signCustomDirText();
+  if(signHasArrow() && !signIsHoriz(active.u.arrow)) return signAutoDirText();
+  return '';
+}
+
+/* ---------- sign engine: primitives ---------- */
+
+function signBackground(ctx, W, H){
+  ctx.fillStyle = SIGN_C.green; ctx.fillRect(0,0,W,H);
+  const cx = W/2, cy = H*0.42, R = Math.sqrt(W*W+H*H);
+  ctx.save(); ctx.fillStyle = SIGN_C.ray;
+  for(let i=0;i<32;i+=2){
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,R,(i/32)*Math.PI*2,((i+1)/32)*Math.PI*2);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+function signOutlinedText(ctx, text, cx, y, size, strokeW){
+  ctx.font = signFontOf(size, 800);
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.lineJoin='round'; ctx.lineWidth=strokeW; ctx.strokeStyle=SIGN_C.dark;
+  ctx.strokeText(text, cx, y);
+  ctx.fillStyle=SIGN_C.white; ctx.fillText(text, cx, y);
+}
+function signPill(ctx, text, cx, top, h, maxW, bg, fg){
+  const fs = signFitSize(ctx, text, maxW - h, h*0.58, 600);
+  ctx.font = signFontOf(fs, 600);
+  let w = ctx.measureText(text).width + h*1.1;
+  if(w > maxW) w = maxW;
+  ctx.fillStyle = bg || SIGN_C.white;
+  signRoundRect(ctx, cx-w/2, top, w, h, h/2); ctx.fill();
+  ctx.fillStyle = fg || SIGN_C.green;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(text, cx, top + h*0.54);
+}
+function signDateBlock(ctx, x, y, size, day, monthYear){
+  ctx.fillStyle = SIGN_C.white;
+  signRoundRect(ctx, x, y, size, size, size*0.16); ctx.fill();
+  const ds = signFitSize(ctx, day, size*0.78, size*0.82, 800);
+  ctx.font = signFontOf(ds, 800); ctx.fillStyle = SIGN_C.green;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(day, x+size/2, y+size*0.55);
+
+  const parts = monthYear.split(' ');
+  const rx = x + size*1.18, rw = size*0.98;
+  ctx.font = signFontOf(signFitSize(ctx, parts[0], rw, size*0.34, 700), 700);
+  ctx.fillStyle = SIGN_C.white; ctx.textAlign='left';
+  ctx.fillText(parts[0], rx, y+size*0.28);
+  ctx.strokeStyle = SIGN_C.white; ctx.lineWidth = Math.max(2, size*0.03);
+  ctx.beginPath(); ctx.moveTo(rx, y+size*0.52); ctx.lineTo(rx+rw, y+size*0.52); ctx.stroke();
+  ctx.font = signFontOf(signFitSize(ctx, parts[1], rw, size*0.34, 700), 700);
+  ctx.fillText(parts[1], rx, y+size*0.78);
+}
+
+const SIGN_DEFAULT_LOGO = new Image();
+SIGN_DEFAULT_LOGO.src = 'data:image/png;base64,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';
+SIGN_DEFAULT_LOGO.onload = function(){};
+function signLogoImage(){
+  if(SIGN_DEFAULT_LOGO.complete && SIGN_DEFAULT_LOGO.naturalWidth) return SIGN_DEFAULT_LOGO;
+  return null;
+}
+function signLogo(ctx, cx, top, boxW, boxH){
+  if(boxH === undefined) boxH = boxW*0.84;
+  const img = signLogoImage();
+  if(img){
+    const r = img.naturalWidth/img.naturalHeight;
+    let lw = boxW, lh = boxW/r;
+    if(lh > boxH){ lh = boxH; lw = boxH*r; }
+    ctx.drawImage(img, cx-lw/2, top, lw, lh);
+    return;
+  }
+  const w = Math.min(boxW, boxH*1.19), h = w/1.19;
+  ctx.fillStyle = SIGN_C.yellow;
+  signRoundRect(ctx, cx-w/2, top, w, h, h*0.10); ctx.fill();
+  ctx.font = signFontOf(h*0.42, 800);
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle = SIGN_C.green; ctx.fillText('CJ', cx-w*0.08, top+h*0.42);
+  ctx.fillStyle = SIGN_C.red;   ctx.fillText('x',  cx+w*0.22, top+h*0.42);
+}
+
+/* ---------- sign engine: arrows ---------- */
+
+function signStraightArrow(ctx, cx, cy, L, T, rot){
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
+  const headL = L*0.36, shaftT = T*0.52;
+  ctx.beginPath();
+  ctx.moveTo(-L/2,-shaftT/2); ctx.lineTo(L/2-headL,-shaftT/2); ctx.lineTo(L/2-headL,-T/2);
+  ctx.lineTo(L/2,0); ctx.lineTo(L/2-headL,T/2); ctx.lineTo(L/2-headL,shaftT/2); ctx.lineTo(-L/2,shaftT/2);
+  ctx.closePath(); ctx.fillStyle = SIGN_C.white; ctx.fill(); ctx.restore();
+}
+function signBentArrow(ctx, cx, cy, w, h, toRight){
+  const t = Math.min(w,h)*0.30;
+  const hl = w*0.30, hh = t*0.95;
+  const armY = -h/2 + hh;
+  const sx = toRight ? -w*0.20 : w*0.20;
+  const tipX = toRight ? w/2 : -w/2;
+  const baseX = toRight ? (w/2-hl) : (-w/2+hl);
+  const s = toRight ? 1 : -1;
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.beginPath();
+  ctx.moveTo(sx - s*t/2, h/2);
+  ctx.lineTo(sx - s*t/2, armY - t/2);
+  ctx.lineTo(baseX, armY - t/2);
+  ctx.lineTo(baseX, armY - hh);
+  ctx.lineTo(tipX, armY);
+  ctx.lineTo(baseX, armY + hh);
+  ctx.lineTo(baseX, armY + t/2);
+  ctx.lineTo(sx + s*t/2, armY + t/2);
+  ctx.lineTo(sx + s*t/2, h/2);
+  ctx.closePath();
+  ctx.fillStyle = SIGN_C.white; ctx.fill(); ctx.restore();
+}
+function signUturnArrow(ctx, cx, cy, w, h){
+  const t = Math.min(w,h)*0.24;
+  const R = w*0.28;
+  const upX = -R, downX = R;
+  const topY = -h/2 + R + t*0.2;
+  const hh = t*0.95, hl = h*0.22;
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.beginPath();
+  ctx.moveTo(upX - t/2, h/2);
+  ctx.lineTo(upX - t/2, topY);
+  ctx.arc(0, topY, R + t/2, Math.PI, 0, false);
+  ctx.lineTo(downX + t/2, h/2 - hl);
+  ctx.lineTo(downX + hh, h/2 - hl);
+  ctx.lineTo(downX, h/2);
+  ctx.lineTo(downX - hh, h/2 - hl);
+  ctx.lineTo(downX - t/2, h/2 - hl);
+  ctx.lineTo(downX - t/2, topY);
+  ctx.arc(0, topY, R - t/2, 0, Math.PI, true);
+  ctx.lineTo(upX + t/2, h/2);
+  ctx.closePath();
+  ctx.fillStyle = SIGN_C.white; ctx.fill(); ctx.restore();
+}
+function signDrawArrow(ctx, kind, cx, cy, w, h, label){
+  if(kind === 'none') return;
+  if(kind === 'right') signStraightArrow(ctx, cx, cy, w, h, 0);
+  else if(kind === 'left') signStraightArrow(ctx, cx, cy, w, h, Math.PI);
+  else if(kind === 'up') signStraightArrow(ctx, cx, cy, h, w, -Math.PI/2);
+  else if(kind === 'arrive_right') signStraightArrow(ctx, cx, cy, Math.min(w,h)*1.28, Math.min(w,h)*0.52, Math.PI/4);
+  else if(kind === 'arrive_left') signStraightArrow(ctx, cx, cy, Math.min(w,h)*1.28, Math.min(w,h)*0.52, Math.PI*0.75);
+  else if(kind === 'up_right') signBentArrow(ctx, cx, cy, w, h, true);
+  else if(kind === 'up_left') signBentArrow(ctx, cx, cy, w, h, false);
+  else if(kind === 'uturn') signUturnArrow(ctx, cx, cy, w, h);
+
+  if(label && signIsHoriz(kind)){
+    const fs = signFitSize(ctx, label, (w - w*0.36)*0.86, h*0.42, 800);
+    ctx.font = signFontOf(fs, 800); ctx.fillStyle = SIGN_C.green;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(label, cx + (kind === 'right' ? -w*0.16 : w*0.16), cy);
+  }
+}
+
+/* ---------- sign engine: Bao Cafe promo panel ---------- */
+
+const SIGN_BOKEH = [[0.12,0.18,0.055],[0.83,0.12,0.04],[0.72,0.30,0.028],[0.20,0.42,0.03],
+             [0.92,0.46,0.05],[0.06,0.62,0.035],[0.55,0.09,0.025],[0.36,0.22,0.02]];
+
+function signBaoCup(ctx, cx, baseY, ch, kind){
+  const topW = ch*0.52, botW = ch*0.38, bodyH = ch*0.78;
+  const topY = baseY - bodyH;
+  ctx.beginPath();
+  ctx.moveTo(cx-topW/2, topY);
+  ctx.lineTo(cx+topW/2, topY);
+  ctx.lineTo(cx+botW/2, baseY-ch*0.05);
+  ctx.quadraticCurveTo(cx+botW/2, baseY, cx+botW/2-ch*0.05, baseY);
+  ctx.lineTo(cx-botW/2+ch*0.05, baseY);
+  ctx.quadraticCurveTo(cx-botW/2, baseY, cx-botW/2, baseY-ch*0.05);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(cx-topW/2, 0, cx+topW/2, 0);
+  if(kind === 'dark'){ g.addColorStop(0,'#2E1608'); g.addColorStop(0.45,'#5B2A10'); g.addColorStop(1,'#1E0F06'); }
+  else { g.addColorStop(0,'#C97C3C'); g.addColorStop(0.45,'#E7A468'); g.addColorStop(1,'#B0672E'); }
+  ctx.fillStyle = g; ctx.fill();
+
+  if(kind === 'latte'){
+    ctx.save(); ctx.beginPath();
+    ctx.rect(cx-topW/2, topY, topW, bodyH*0.22); ctx.clip();
+    ctx.fillStyle = '#F7F1E7';
+    ctx.fillRect(cx-topW/2, topY, topW, bodyH*0.22);
+    ctx.restore();
+  }
+  ctx.fillStyle = kind === 'dark' ? '#141414' : 'rgba(245,242,236,.75)';
+  signRoundRect(ctx, cx-topW*0.56, topY-ch*0.10, topW*1.12, ch*0.11, ch*0.045); ctx.fill();
+  const r = ch*0.115, by = topY + bodyH*0.42;
+  ctx.beginPath(); ctx.arc(cx, by, r, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(20,12,6,.88)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = Math.max(1, r*0.08); ctx.stroke();
+  ctx.fillStyle = SIGN_C.cream; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font = signFontOf(r*0.42, 700); ctx.fillText('BAO', cx, by - r*0.20);
+  ctx.font = signFontOf(r*0.34, 500); ctx.fillText('CAFE', cx, by + r*0.30);
+}
+
+function signBaoPanel(ctx, x, y, w, h){
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+
+  const artImg = active.u.officialArtImgObj;
+  if(artImg){
+    const s = Math.max(w/artImg.width, h/artImg.height);
+    const dw = artImg.width*s, dh = artImg.height*s;
+    ctx.drawImage(artImg, x + (w-dw)/2, y + (h-dh)/2, dw, dh);
+    ctx.restore();
+    return;
+  }
+
+  const g = ctx.createRadialGradient(x+w*0.5, y+h*0.42, w*0.05, x+w*0.5, y+h*0.5, w*0.9);
+  g.addColorStop(0, SIGN_C.baoGlow); g.addColorStop(0.45, SIGN_C.baoMid); g.addColorStop(1, SIGN_C.baoDark);
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+
+  ctx.fillStyle = 'rgba(255,214,160,.14)';
+  for(let i=0;i<SIGN_BOKEH.length;i++){
+    ctx.beginPath();
+    ctx.arc(x + SIGN_BOKEH[i][0]*w, y + SIGN_BOKEH[i][1]*h, SIGN_BOKEH[i][2]*w, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  const wide = (w/h) > 1.6;
+
+  const br = wide ? h*0.16 : Math.min(w,h)*0.085;
+  const bx = wide ? (x + w*0.07) : (x + w*0.89);
+  const by = wide ? (y + h*0.24) : (y + h*0.09);
+  ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(18,11,6,.9)'; ctx.fill();
+  ctx.strokeStyle = SIGN_C.cream; ctx.lineWidth = Math.max(1.5, br*0.07); ctx.stroke();
+  ctx.fillStyle = SIGN_C.cream; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font = signFontOf(br*0.40, 700); ctx.fillText('BAO', bx, by - br*0.16);
+  ctx.font = signFontOf(br*0.32, 500); ctx.fillText('CAFE', bx, by + br*0.32);
+
+  const headX  = wide ? (x + w*0.34) : (x + w*0.5);
+  const headY  = wide ? (y + h*0.44) : (y + h*0.30);
+  const headW  = wide ? w*0.40 : w*0.68;
+  const headSz = wide ? h*0.36 : h*0.30;
+
+  ctx.font = signFontOf(signFitSize(ctx, '1 แถม 1', headW, headSz, 800), 800);
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillStyle = SIGN_C.white;
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = Math.min(w,h)*0.04; ctx.shadowOffsetY = h*0.006;
+  ctx.fillText('1 แถม 1', headX, headY);
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+
+  const pw = wide ? w*0.34 : w*0.60;
+  const ph = wide ? h*0.26  : h*0.155;
+  const px = headX - pw/2;
+  const py = wide ? (y + h*0.52) : (y + h*0.335);
+  ctx.fillStyle = '#8E1B14';
+  signRoundRect(ctx, px, py, pw, ph, ph*0.22); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = Math.max(1, ph*0.04); ctx.stroke();
+  ctx.fillStyle = SIGN_C.white; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font = signFontOf(signFitSize(ctx, '2 แก้ว 40.-', pw*0.7, ph*0.52, 800), 800);
+  ctx.fillText('2 แก้ว 40.-', headX, py + ph*0.38);
+  ctx.font = signFontOf(signFitSize(ctx, '(ปกติ 80 บาท)', pw*0.55, ph*0.26, 500), 500);
+  ctx.fillText('(ปกติ 80 บาท)', headX, py + ph*0.76);
+
+  const ch = wide ? h*0.78 : ((w/h) < 1.05 ? h*0.42 : h*0.46);
+  const baseY = y + h*0.94;
+  const c1x = wide ? (x + w*0.70) : (x + w*0.34);
+  const c2x = wide ? (x + w*0.87) : (x + w*0.66);
+  signBaoCup(ctx, c1x, baseY, ch*0.92, 'dark');
+  signBaoCup(ctx, c2x, baseY - ch*0.04, ch, 'latte');
+
+  ctx.restore();
+}
+
+/* ---------- sign engine: templates: announce ---------- */
+
+function signAnnounceGuerrilla(ctx, W, H){
+  signBackground(ctx, W, H);
+  signLogo(ctx, W/2, H*0.018, W*0.30, H*0.095);
+  signOutlinedText(ctx, 'เปิดสาขาใหม่', W/2, H*0.182, signFitSize(ctx,'เปิดสาขาใหม่',W*0.90,W*0.19,800), W*0.035);
+  signDateBlock(ctx, W*0.13, H*0.212, W*0.32, signDayStr(), signMonthYearStr());
+
+  ctx.font = signFontOf(signFitSize(ctx,'ซีเจ เอ็กซ์',W*0.86,W*0.24,800), 800);
+  ctx.fillStyle = SIGN_C.white; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillText('ซีเจ เอ็กซ์', W/2, H*0.495);
+  signPill(ctx, 'สาขา ' + active.branch, W/2, H*0.515, H*0.05, W*0.92, SIGN_C.white, SIGN_C.green);
+
+  if(signHasArrow()){
+    if(signIsHoriz(active.u.arrow)) signDrawArrow(ctx, active.u.arrow, W/2, H*0.71, W*0.86, H*0.17, signDistLabel());
+    else signDrawArrow(ctx, active.u.arrow, W/2, H*0.70, W*0.60, H*0.25, '');
+    const bt = signBottomText();
+    if(bt) signOutlinedText(ctx, bt, W/2, H*0.93, signFitSize(ctx,bt,W*0.92,W*0.12,800), W*0.026);
+  } else {
+    signPill(ctx, active.u.landmark || 'จุดสังเกต', W/2, H*0.66, H*0.058, W*0.92, SIGN_C.red, SIGN_C.white);
+    signOutlinedText(ctx, 'ครบ ถูก คุ้ม', W/2, H*0.84, signFitSize(ctx,'ครบ ถูก คุ้ม',W*0.80,W*0.17,800), W*0.03);
+  }
+}
+
+function signAnnounceBanner(ctx, W, H){
+  signBackground(ctx, W, H);
+  signLogo(ctx, W*0.062, H*0.16, W*0.10, H*0.24);
+  signDateBlock(ctx, W*0.115, H*0.19, H*0.42, signDayStr(), signMonthYearStr());
+
+  const midX = W*0.605;
+  signOutlinedText(ctx, 'เปิดสาขาใหม่', midX, H*0.36, signFitSize(ctx,'เปิดสาขาใหม่',W*0.28,H*0.30,800), H*0.035);
+  ctx.font = signFontOf(signFitSize(ctx,'ซีเจ เอ็กซ์',W*0.25,H*0.24,800), 800);
+  ctx.fillStyle = SIGN_C.white; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillText('ซีเจ เอ็กซ์', midX, H*0.63);
+  signPill(ctx, 'สาขา ' + active.branch, midX, H*0.70, H*0.17, W*0.30, SIGN_C.white, SIGN_C.green);
+
+  if(signHasArrow()){
+    const bt = signBottomText();
+    const cy = bt ? H*0.40 : H*0.50;
+    if(signIsHoriz(active.u.arrow)) signDrawArrow(ctx, active.u.arrow, W*0.875, cy, W*0.17, H*0.42, signDistLabel());
+    else signDrawArrow(ctx, active.u.arrow, W*0.875, cy, W*0.115, H*0.56, '');
+    if(bt) signOutlinedText(ctx, bt, W*0.875, H*0.90, signFitSize(ctx,bt,W*0.21,H*0.13,700), H*0.02);
+  } else {
+    signPill(ctx, active.u.landmark || 'จุดสังเกต', W*0.875, H*0.40, H*0.18, W*0.23, SIGN_C.red, SIGN_C.white);
+    signOutlinedText(ctx, 'ครบ ถูก คุ้ม', W*0.875, H*0.76, signFitSize(ctx,'ครบ ถูก คุ้ม',W*0.20,H*0.20,800), H*0.025);
+  }
+}
+
+function signAnnounceSquare(ctx, W, H){
+  signBackground(ctx, W, H);
+  if(signHasArrow()){
+    const bx = W*0.06, by = H*0.055, bs2 = H*0.16;
+    ctx.fillStyle = SIGN_C.white; signRoundRect(ctx, bx, by, bs2*1.05, bs2, bs2*0.18); ctx.fill();
+    ctx.font = signFontOf(signFitSize(ctx,signDayStr(),bs2*0.8,bs2*0.72,800), 800);
+    ctx.fillStyle = SIGN_C.green; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(signDayStr(), bx+bs2*0.52, by+bs2*0.54);
+    ctx.font = signFontOf(signFitSize(ctx,signMonthYearStr(),W*0.20,H*0.055,700), 700);
+    ctx.fillStyle = SIGN_C.white; ctx.textAlign='left'; ctx.fillText(signMonthYearStr(), bx+bs2*1.22, by+bs2*0.5);
+
+    ctx.textAlign='right'; ctx.textBaseline='alphabetic';
+    ctx.font = signFontOf(signFitSize(ctx,'เปิดแล้ว!',W*0.30,H*0.115,800), 800);
+    ctx.lineJoin='round'; ctx.lineWidth=W*0.022; ctx.strokeStyle=SIGN_C.dark;
+    ctx.strokeText('เปิดแล้ว!', W*0.94, by+bs2*0.86);
+    ctx.fillStyle=SIGN_C.white; ctx.fillText('เปิดแล้ว!', W*0.94, by+bs2*0.86);
+
+    signLogo(ctx, W*0.21, H*0.205, W*0.24, H*0.135);
+    ctx.font = signFontOf(signFitSize(ctx,'ซีเจ เอ็กซ์',W*0.40,H*0.13,800), 800);
+    ctx.fillStyle=SIGN_C.white; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText('ซีเจ เอ็กซ์', W*0.38, H*0.275);
+    signPill(ctx, 'สาขา ' + active.branch, W/2, H*0.40, H*0.10, W*0.90, SIGN_C.white, SIGN_C.green);
+
+    if(signIsHoriz(active.u.arrow)) signDrawArrow(ctx, active.u.arrow, W/2, H*0.645, W*0.62, H*0.24, '');
+    else signDrawArrow(ctx, active.u.arrow, W/2, H*0.645, W*0.46, H*0.30, '');
+
+    const bt = signCustomDirText() || signAutoDirText();
+    if(bt) signOutlinedText(ctx, bt, W/2, H*0.945, signFitSize(ctx,bt,W*0.92,H*0.12,800), W*0.026);
+  } else {
+    signDateBlock(ctx, W*0.14, H*0.07, W*0.34, signDayStr(), signMonthYearStr());
+    signLogo(ctx, W/2, H*0.40, W*0.26, H*0.145);
+    ctx.font = signFontOf(signFitSize(ctx,'ซีเจ เอ็กซ์',W*0.80,H*0.19,800), 800);
+    ctx.fillStyle=SIGN_C.white; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillText('ซีเจ เอ็กซ์', W/2, H*0.725);
+    signPill(ctx, 'สาขา ' + active.branch, W/2, H*0.748, H*0.095, W*0.90, SIGN_C.white, SIGN_C.green);
+    signPill(ctx, active.u.landmark || 'จุดสังเกต', W/2, H*0.87, H*0.095, W*0.90, SIGN_C.red, SIGN_C.white);
+  }
+}
+
+/* ---------- sign engine: templates: Bao Cafe ---------- */
+
+function signBaoHeader(ctx, W, headerH, logoW){
+  signBackground(ctx, W, headerH);
+  signLogo(ctx, W*0.17, headerH*0.05, logoW, headerH*0.44);
+  ctx.font = signFontOf(signFitSize(ctx,'ซีเจ เอ็กซ์',W*0.46,headerH*0.38,800), 800);
+  ctx.fillStyle=SIGN_C.white; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('ซีเจ เอ็กซ์', W*0.36, headerH*0.27);
+  signPill(ctx, 'สาขา ' + active.branch, W/2, headerH*0.60, headerH*0.30, W*0.86, SIGN_C.white, SIGN_C.green);
+}
+function signBaoArrowBand_(ctx, W, H, ay, arrowH){
+  // paint a solid background under the arrow strip first — signBaoPanel only fills its own
+  // (shrunken) box, so without this the strip stays transparent and the real site photo
+  // shows through behind the arrow, making it look like it's floating off the card.
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, ay, W, arrowH); ctx.clip();
+  ctx.translate(0, ay);
+  signBackground(ctx, W, arrowH);
+  ctx.restore();
+}
+function signBaoGuerrilla(ctx, W, H){
+  const hh = H*0.20;
+  signBaoHeader(ctx, W, hh, W*0.30);
+  if(signHasArrow()){
+    const arrowH = H*0.22;
+    signBaoPanel(ctx, 0, hh, W, H-hh-arrowH);
+    const ay = H-arrowH;
+    signBaoArrowBand_(ctx, W, H, ay, arrowH);
+    if(signIsHoriz(active.u.arrow)) signDrawArrow(ctx, active.u.arrow, W/2, ay+arrowH*0.5, W*0.86, arrowH*0.72, signDistLabel());
+    else signDrawArrow(ctx, active.u.arrow, W/2, ay+arrowH*0.55, W*0.50, arrowH*0.92, signDistLabel());
+  } else {
+    signBaoPanel(ctx, 0, hh, W, H-hh);
+  }
+}
+function signBaoSquare(ctx, W, H){
+  const hh = H*0.26;
+  signBaoHeader(ctx, W, hh, W*0.28);
+  if(signHasArrow()){
+    const arrowH = H*0.20;
+    signBaoPanel(ctx, 0, hh, W, H-hh-arrowH);
+    const ay = H-arrowH;
+    signBaoArrowBand_(ctx, W, H, ay, arrowH);
+    if(signIsHoriz(active.u.arrow)) signDrawArrow(ctx, active.u.arrow, W/2, ay+arrowH*0.5, W*0.72, arrowH*0.70, signDistLabel());
+    else signDrawArrow(ctx, active.u.arrow, W/2, ay+arrowH*0.55, W*0.46, arrowH*0.92, signDistLabel());
+  } else {
+    signBaoPanel(ctx, 0, hh, W, H-hh);
+  }
+}
+function signBaoBanner(ctx, W, H){
+  const hasArrow = signHasArrow();
+  const sh = H*0.26;
+  const arrowH = hasArrow ? H*0.18 : 0;
+  const ph = H - sh - arrowH;
+  signBaoPanel(ctx, 0, 0, W, ph);
+
+  if(hasArrow){
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, ph, W, arrowH); ctx.clip();
+    ctx.translate(0, ph);
+    signBackground(ctx, W, arrowH);
+    ctx.restore();
+    if(signIsHoriz(active.u.arrow)) signDrawArrow(ctx, active.u.arrow, W/2, ph+arrowH*0.52, W*0.72, arrowH*0.78, signDistLabel());
+    else signDrawArrow(ctx, active.u.arrow, W*0.14, ph+arrowH*0.5, arrowH*0.80, arrowH*0.88, signDistLabel());
+  }
+
+  const stripY = ph + arrowH;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, stripY, W, sh); ctx.clip();
+  ctx.translate(0, stripY);
+  signBackground(ctx, W, sh);
+  ctx.restore();
+  ctx.font = signFontOf(signFitSize(ctx,'ซีเจ เอ็กซ์ ครบ ถูก คุ้ม',W*0.44,sh*0.58,800), 800);
+  ctx.fillStyle=SIGN_C.white; ctx.textAlign='left'; ctx.textBaseline='middle';
+  signLogo(ctx, W*0.055, stripY + sh*0.16, W*0.075, sh*0.66);
+  ctx.fillText('ซีเจ เอ็กซ์ ครบ ถูก คุ้ม', W*0.12, stripY + sh*0.5);
+  signPill(ctx, 'สาขา ' + active.branch, W*0.74, stripY + sh*0.20, sh*0.60, W*0.40, SIGN_C.white, SIGN_C.green);
+}
+
+/* ---------- sign engine: render entry points ---------- */
+
+function signRenderTo(ctx, W, H){
+  ctx.save(); ctx.clearRect(0,0,W,H);
+  if(active.u.variant === 'bao'){
+    if(active.type === 'guerrilla') signBaoGuerrilla(ctx, W, H);
+    else if(active.type === 'banner') signBaoBanner(ctx, W, H);
+    else signBaoSquare(ctx, W, H);
+  } else if(active.u.variant === 'custom'){
+    signCustomTemplate(ctx, W, H);
+  } else {
+    if(active.type === 'guerrilla') signAnnounceGuerrilla(ctx, W, H);
+    else if(active.type === 'banner') signAnnounceBanner(ctx, W, H);
+    else signAnnounceSquare(ctx, W, H);
+  }
+  ctx.restore();
+}
+
+// ---------- sign engine: template: Customize (plain background, free-typed text — handed to MKT to finish) ----------
+function signCustomTemplate(ctx, W, H){
+  ctx.fillStyle = SIGN_C.green; ctx.fillRect(0,0,W,H); // flat color, no ray pattern — MKT will design over this
+  const line1 = (active.u.customLine1 || '').trim();
+  const line2 = (active.u.customLine2 || '').trim();
+  const hasArrow = signHasArrow();
+  const zoneH = hasArrow ? H*0.58 : H; // leave a band at the bottom for the arrow when enabled
+
+  if(!line1 && !line2){
+    signOutlinedText(ctx, '(พิมพ์ข้อความป้ายด้านซ้าย)', W/2, zoneH*0.52, signFitSize(ctx,'(พิมพ์ข้อความป้ายด้านซ้าย)',W*0.86,zoneH*0.06,700), W*0.012);
+  } else {
+    if(line1){
+      const y = line2 ? zoneH*0.46 : zoneH*0.52;
+      signOutlinedText(ctx, line1, W/2, y, signFitSize(ctx,line1,W*0.88,zoneH*0.16,800), W*0.026);
+    }
+    if(line2){
+      signOutlinedText(ctx, line2, W/2, zoneH*0.62, signFitSize(ctx,line2,W*0.86,zoneH*0.09,700), W*0.018);
+    }
+  }
+
+  if(hasArrow){
+    if(signIsHoriz(active.u.arrow)) signDrawArrow(ctx, active.u.arrow, W/2, H*0.80, W*0.82, H*0.30, signDistLabel());
+    else signDrawArrow(ctx, active.u.arrow, W/2, H*0.78, W*0.54, H*0.36, '');
+  }
+}
+
+// Renders one unit's sign design at the given scale and returns the canvas.
+// `branchName`/`dateObj` come from the branch-level fields; everything else
+// (variant/arrow/distance/landmark/promo/officialArt) comes from the unit.
+function makeSignCanvas(unit, signType, branchName, dateObj, scale){
+  active = { u: unit, type: signType, branch: branchName, date: dateObj };
+  const spec = SIGN_SPECS[signType] || SIGN_SPECS.guerrilla;
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(spec.w*scale); cv.height = Math.round(spec.h*scale);
+  const ctx = cv.getContext('2d'); ctx.scale(scale, scale);
+  signRenderTo(ctx, spec.w, spec.h);
+  return cv;
+}
+
+// ==================== Per-unit photo mockup (sign design composited onto the real site photo) ====================
+
+function getBranchDateObj(){
+  const v = document.getElementById('openStart') ? document.getElementById('openStart').value : '';
+  if(v){
+    const p = v.split('-');
+    return new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10));
+  }
+  return new Date();
+}
+function getBranchNameForSign(){
+  return document.getElementById('branchName').value || document.getElementById('branchCode').value || '';
+}
+
+async function recompositeUnit(signageId, unitIdx){
+  const s = signages.find(x=>x.id===signageId);
+  if(!s) return;
+  const u = s.units[unitIdx];
+
+  // load the official Bao Cafe artwork image object (if any) before rendering,
+  // since signBaoPanel() needs an actual Image, not just a data URL
+  u.officialArtImgObj = u.officialArtImg ? await loadImageAsync(u.officialArtImg) : null;
+
+  const branchName = getBranchNameForSign();
+  const dateObj = getBranchDateObj();
+  const signCanvas1x = makeSignCanvas(u, u.typeKey || 'guerrilla', branchName, dateObj, 1);
+  u.signPng = signCanvas1x.toDataURL('image/png');
+
+  if(!u.locationPhoto){ u.photo = ''; return; }
+
+  const bgImg = await loadImageAsync(u.locationPhoto);
+  const w = Math.min(bgImg.naturalWidth || bgImg.width, 1400);
+  const h = Math.round((bgImg.naturalHeight || bgImg.height) * (w / (bgImg.naturalWidth || bgImg.width)));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bgImg, 0, 0, w, h);
+
+  const spec = SIGN_SPECS[u.typeKey] || SIGN_SPECS.guerrilla;
+  const signImg = await loadImageAsync(u.signPng);
+  const sh = h*(u.sscale!=null?u.sscale:0.32)*(spec.h/Math.max(spec.w,spec.h))*1.6;
+  let sw = sh*(spec.w/spec.h);
+  let finalSh = sh;
+  if(sw > w*0.9){ sw = w*0.9; finalSh = sw*(spec.h/spec.w); }
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=Math.max(6,w*0.008); ctx.shadowOffsetY=Math.max(3,w*0.004);
+  ctx.drawImage(signImg, (u.sx!=null?u.sx:0.5)*w - sw/2, (u.sy!=null?u.sy:0.5)*h - finalSh/2, sw, finalSh);
+  ctx.restore();
+
+  active = { u, type: (u.typeKey || 'guerrilla'), branch: branchName, date: dateObj };
+  let stamp = signFullDateStr() + '  |  ' + branchName;
+  if(u.lat != null) stamp += '  |  ' + u.lat.toFixed(5) + ', ' + u.lng.toFixed(5);
+  ctx.font = signFontOf(Math.max(13, w*0.018), 500);
+  const barH = Math.max(26, w*0.036);
+  ctx.fillStyle='rgba(0,0,0,.62)';
+  ctx.fillRect(0, h-barH, ctx.measureText(stamp).width + w*0.03, barH);
+  ctx.fillStyle='#fff'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(stamp, w*0.015, h - barH/2);
+
+  u.photo = canvas.toDataURL('image/jpeg', 0.85);
+}
+
+// จุดเดียวที่คุมการบันทึกรูปป้ายขึ้นเซิร์ฟเวอร์ทั้งหมด — เดิมหลายจุดที่เรียกฟังก์ชันนี้ไม่ได้ await/catch เลย
+// (ยิงแล้วไม่รอผล) ถ้าบันทึกไม่สำเร็จเลยไม่มีใครรู้ตัวจนกว่าจะโหลดกลับมาดูแล้วรูปพัง เลยรวบ error handling
+// มาไว้ตรงนี้ที่เดียว จะได้ไม่ต้องแก้ทุกจุดที่เรียกใช้ และไม่มีทางหลุดแบบเงียบๆ อีก
+async function saveUnitPhotoIfBackend(signageId, unitIdx){
+  const s = signages.find(x=>x.id===signageId);
+  if(!s || typeof savePhotoToSheet !== 'function') return;
+  const u = s.units[unitIdx];
+  const ownerId = signageId + '::' + unitIdx;
+  photoSaveStatus[ownerId] = 'saving';
+  try{
+    await savePhotoToSheet(ownerId, u.photo);
+    // เก็บรูปสถานที่จริง (ก่อนวางป้ายทับ) แยกไว้ด้วยเสมอ — เดิมเก็บแค่รูปรวมสุดท้าย พอโหลดกลับมาดูทีหลัง
+    // (คนละวัน/เครื่อง) เลยกลับไปลากปรับตำแหน่งป้ายต่อไม่ได้ ต้องลบรูปแล้วแนบ+ปักป้ายใหม่ทั้งหมด
+    await savePhotoToSheet(ownerId + '::loc', u.locationPhoto);
+    photoSaveStatus[ownerId] = 'ok';
+  }catch(e){
+    photoSaveStatus[ownerId] = 'failed';
+    console.error('บันทึกรูปป้ายไม่สำเร็จ:', e.message);
+  }
+  renderSignages();
+}
+// ==================== รวมหลายป้ายที่ใช้รูปสถานที่จริงเดียวกัน ให้เป็น "1 รูป เห็นทุกป้าย" ====================
+// ใช้ตอนสร้าง PPTX เท่านั้น (ไม่กระทบรูป/สไลด์แยกที่แก้ในหน้าเว็บ) — วาดป้ายทุกอันที่แชร์รูปเดียวกัน
+// ซ้อนลงบนพื้นหลังเดียวกัน ตามตำแหน่งหมุด (sx/sy/sscale) ของแต่ละป้าย
+async function buildComboPhotoForPoint(s, unitIdxs){
+  const units = s.units || [];
+  const baseIdx = unitIdxs.find(i => units[i] && units[i].locationPhoto);
+  const first = baseIdx != null ? units[baseIdx] : null;
+  if(!first || !first.locationPhoto) return null;
+
+  const bgImg = await loadImageAsync(first.locationPhoto);
+  const w = Math.min(bgImg.naturalWidth || bgImg.width, 1400);
+  const h = Math.round((bgImg.naturalHeight || bgImg.height) * (w / (bgImg.naturalWidth || bgImg.width)));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bgImg, 0, 0, w, h);
+
+  for(const idx of unitIdxs){
+    const u = units[idx];
+    if(!u.signPng) continue;
+    const spec = SIGN_SPECS[u.typeKey] || SIGN_SPECS.guerrilla; // แต่ละป้ายในจุดเดียวกันอาจคนละไซส์ได้ ต้องใช้ spec ของป้ายนั้นๆ เอง
+    const signImg = await loadImageAsync(u.signPng);
+    const sh = h*(u.sscale!=null?u.sscale:0.32)*(spec.h/Math.max(spec.w,spec.h))*1.6;
+    let sw = sh*(spec.w/spec.h);
+    let finalSh = sh;
+    if(sw > w*0.9){ sw = w*0.9; finalSh = sw*(spec.h/spec.w); }
+    ctx.save();
+    ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=Math.max(6,w*0.008); ctx.shadowOffsetY=Math.max(3,w*0.004);
+    ctx.drawImage(signImg, (u.sx!=null?u.sx:0.5)*w - sw/2, (u.sy!=null?u.sy:0.5)*h - finalSh/2, sw, finalSh);
+    ctx.restore();
+  }
+
+  const branchName = getBranchNameForSign();
+  const dateObj = getBranchDateObj();
+  active = { u: first, type: (first.typeKey || 'guerrilla'), branch: branchName, date: dateObj };
+  let stamp = signFullDateStr() + '  |  ' + branchName;
+  if(first.lat != null) stamp += '  |  ' + first.lat.toFixed(5) + ', ' + first.lng.toFixed(5);
+  ctx.font = signFontOf(Math.max(13, w*0.018), 500);
+  const barH = Math.max(26, w*0.036);
+  ctx.fillStyle='rgba(0,0,0,.62)';
+  ctx.fillRect(0, h-barH, ctx.measureText(stamp).width + w*0.03, barH);
+  ctx.fillStyle='#fff'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(stamp, w*0.015, h - barH/2);
+
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+// จุดหนึ่งมีหลายป้าย = สถานที่เดียวกันเสมอ (แนบรูป/กรอกพิกัดครั้งเดียวที่จุด ระบบ sync ให้ทุกป้าย
+// ในจุดเดียวกันเหมือนกันเสมอ — ดู syncSignagePointFromUnit0_) เลยรวมทุกป้ายในจุดเป็น 1 ภาพเดียว
+// เห็นทุกป้ายพร้อมกันเสมอตอนสร้าง PPTX
+async function buildComboGroupsForSignage(s){
+  const units = s.units || [];
+  if(units.length < 2) return [];
+  const allIdxs = units.map((_, i) => i);
+  const combinedPhoto = await buildComboPhotoForPoint(s, allIdxs);
+  return combinedPhoto ? [{ unitIdxs: allIdxs, photo: combinedPhoto }] : [];
+}
+
+// จุดเดียวกันมีหลายป้าย (units.length > 1) -> รูปสถานที่จริงมักเป็นรูปเดียวกัน
+// (ถ่ายครั้งเดียว ปักได้หลายป้ายในรูปเดียว) ฟังก์ชันนี้เอารูป+พิกัดจากป้ายต้นทาง
+// ไปใส่ให้ป้ายอื่นๆ ในจุดเดียวกันที่ "ยังไม่มีรูปเป็นของตัวเอง" โดยอัตโนมัติ
+// แต่ละป้ายยังคง sx/sy/sscale ของตัวเอง เลยไปจัดตำแหน่งหมุดแยกกันบนรูปเดียวกันได้
+// force=true (กดปุ่มด้วยตัวเอง) จะทับรูปเดิมของป้ายอื่นด้วย ใช้ตอนอยากซิงก์รูปใหม่ให้ทุกป้าย
+// รูปสถานที่จริง: 1 จุด (signage point) มีรูปเดียว ใช้ร่วมกันทุกป้าย — แนบครั้งเดียวที่จุด
+// แล้วกระจาย (สำเนา) ให้ทุก unit ในจุดนั้นเก็บไว้เหมือนกัน (ยังคงเก็บ/บันทึกแยกต่อป้ายเหมือนเดิม
+// เพื่อไม่ต้องแก้โครงสร้างบันทึกขึ้น Sheet ฝั่ง backend — แค่ตอน "แนบ" ทำให้ทุกป้ายได้รูปเดียวกันเสมอ)
+async function syncSignagePointFromUnit0_(signageId){
+  const s = signages.find(x=>x.id===signageId);
+  if(!s || !s.units || !s.units.length) return;
+  const src = s.units[0];
+  for(let i=1; i<s.units.length; i++){
+    const u = s.units[i];
+    u.locationPhoto = src.locationPhoto;
+    u.lat = src.lat; u.lng = src.lng; u.accuracy = src.accuracy; u.gpsTime = src.gpsTime; u.coords = src.coords;
+    await recompositeUnit(signageId, i);
+  }
+}
+async function handleSignageLocationPhoto(signageId, input){
+  const file = input.files[0];
+  if(!file) return;
+  const s = signages.find(x=>x.id===signageId);
+  if(!s) return;
+  s.units = s.units && s.units.length ? s.units : [makeEmptyUnit()];
+  const u = s.units[0];
+  try{
+    const compressed = await compressImage(file, 1000, 0.65);
+    u.locationPhoto = compressed;
+    // ปักหน้างานจริง (ยังไม่มีพิกัด) -> จับ GPS ปัจจุบันให้อัตโนมัติ ตามเวิร์กโฟลว์หน้างานจริง
+    // ทำย้อนหลัง (มีพิกัดที่พิมพ์/วางจาก LINE ไว้แล้ว) -> ไม่ทับพิกัดเดิมด้วยตำแหน่งปัจจุบัน
+    if(navigator.geolocation && !u.coords){
+      navigator.geolocation.getCurrentPosition((pos) => {
+        u.lat = pos.coords.latitude; u.lng = pos.coords.longitude;
+        u.accuracy = Math.round(pos.coords.accuracy); u.gpsTime = new Date().toISOString();
+        u.coords = u.lat.toFixed(6) + ', ' + u.lng.toFixed(6);
+        // จุดนี้ยังไม่มีพิกัดตอนแนบรูป เลยดึงตำแหน่งปัจจุบันของอุปกรณ์มาใช้ให้อัตโนมัติ (เวิร์กโฟลว์หน้างานจริง)
+        // — แต่ถ้ากำลังอัปโหลดรูปย้อนหลังจากที่อื่น (เช่น ออฟฟิศ) พิกัดนี้จะผิด ต้องแจ้งให้เห็นทันทีเพื่อไปแก้เอง
+        let gpsNotice = 'จุดนี้ยังไม่มีพิกัด ระบบเลยใช้ตำแหน่งปัจจุบันของอุปกรณ์นี้ให้อัตโนมัติ (' + u.lat.toFixed(5) + ', ' + u.lng.toFixed(5) + ')\nถ้าตอนนี้ไม่ได้อยู่หน้างานจริง (เช่น แนบรูปย้อนหลังจากที่อื่น) กรุณาแก้ช่อง "พิกัด" ให้ตรงจุดจริงด้วยนะคะ';
+        if(pos.coords.accuracy > 50) gpsNotice += '\n(ความแม่นยำ GPS ตอนนี้ประมาณ ±' + Math.round(pos.coords.accuracy) + ' เมตร ค่อนข้างต่ำด้วย)';
+        alert(gpsNotice);
+        recompositeUnit(signageId, 0).then(async () => {
+          await syncSignagePointFromUnit0_(signageId);
+          renderSignages(); scheduleAutosave();
+          (s.units||[]).forEach((_,i)=>saveUnitPhotoIfBackend(signageId, i));
+        });
+      }, () => {
+        recompositeUnit(signageId, 0).then(async () => {
+          await syncSignagePointFromUnit0_(signageId);
+          renderSignages(); scheduleAutosave();
+          (s.units||[]).forEach((_,i)=>saveUnitPhotoIfBackend(signageId, i));
+        });
+      }, { enableHighAccuracy: true, timeout: 10000 });
+    } else {
+      await recompositeUnit(signageId, 0);
+      await syncSignagePointFromUnit0_(signageId);
+      renderSignages(); scheduleAutosave();
+      (s.units||[]).forEach((_,i)=>saveUnitPhotoIfBackend(signageId, i));
+    }
+  }catch(e){
+    alert('แนบรูปไม่สำเร็จ: ' + e.message);
+  }
+}
+async function removeSignagePhoto(signageId){
+  const s = signages.find(x=>x.id===signageId);
+  if(!s) return;
+  (s.units||[]).forEach(u => { u.locationPhoto = ''; u.photo = ''; });
+  renderSignages();
+  scheduleAutosave();
+  (s.units||[]).forEach((_,i)=>{
+    saveUnitPhotoIfBackend(signageId, i).catch(e => console.error('ลบรูปจาก Sheet ไม่สำเร็จ:', e.message));
+  });
+}
+// สถานะบันทึกรูปของ "จุด" (รวมทุกป้ายในจุดเดียวกัน เพราะแชร์รูปเดียวกันเสมอ) — กำลังบันทึกถ้ามีป้ายไหนกำลังเซฟ,
+// ไม่สำเร็จถ้ามีป้ายไหนพัง, สำเร็จถ้าทุกป้ายสำเร็จหมด
+function pointPhotoStatus_(s){
+  const ids = (s.units||[]).map((_,i)=> s.id+'::'+i);
+  if(!ids.length) return '';
+  if(ids.some(id=>photoSaveStatus[id]==='saving')) return 'saving';
+  if(ids.some(id=>photoSaveStatus[id]==='failed')) return 'failed';
+  if(ids.every(id=>photoSaveStatus[id]==='ok')) return 'ok';
+  return '';
+}
+function retryPointPhotoSave(signageId){
+  const s = signages.find(x=>x.id===signageId);
+  if(!s) return;
+  (s.units||[]).forEach((_,i)=> saveUnitPhotoIfBackend(signageId, i));
+}
+async function handleOfficialArt(signageId, unitIdx, input){
+  const file = input.files[0];
+  if(!file) return;
+  const s = signages.find(x=>x.id===signageId);
+  const u = s.units[unitIdx];
+  try{
+    const compressed = await compressImage(file, 1200, 0.85);
+    u.officialArtImg = compressed;
+    if(typeof savePhotoToSheet === 'function'){ await savePhotoToSheet(signageId + '::' + unitIdx + '::art', compressed); }
+    if(u.locationPhoto){ await recompositeUnit(signageId, unitIdx); await saveUnitPhotoIfBackend(signageId, unitIdx); }
+    renderSignages();
+    scheduleAutosave();
+  }catch(e){ alert('แนบอาร์ตเวิร์กไม่สำเร็จ: ' + e.message); }
+}
+async function updateUnitAndRecomposite(signageId, unitIdx, field, value){
+  updateSignageUnit(signageId, unitIdx, field, value);
+  const s = signages.find(x=>x.id===signageId);
+  const u = s.units[unitIdx];
+  if(u.locationPhoto){
+    await recompositeUnit(signageId, unitIdx);
+    await saveUnitPhotoIfBackend(signageId, unitIdx);
+  }
+  renderSignages();
+}
+// typing variant used for text inputs (dirText/landmark) — recomposites
+// without a full re-render, so the input doesn't lose focus while the user types
+async function updateUnitTyped(signageId, unitIdx, field, value){
+  updateSignageUnit(signageId, unitIdx, field, value);
+  const s = signages.find(x=>x.id===signageId);
+  const u = s.units[unitIdx];
+  if(u.locationPhoto){
+    await recompositeUnit(signageId, unitIdx);
+    await saveUnitPhotoIfBackend(signageId, unitIdx);
+  }
+}
+// pasting a coordinate pair or a Google Maps link into a signage point's coords box —
+// parses it and fills lat/lng directly (shared by every unit in the point), for cases
+// where the location was pinned earlier (e.g. shared in LINE) rather than captured live with GPS on-site
+function handleSignageCoordsPaste(ev, signageId){
+  const text = (ev.clipboardData || window.clipboardData).getData('text');
+  const parsed = parseCoordsText(text);
+  if(parsed){
+    ev.preventDefault();
+    const s = signages.find(x=>x.id===signageId);
+    if(!s) return;
+    s.units = s.units && s.units.length ? s.units : [makeEmptyUnit()];
+    const coordsStr = parsed.lat.toFixed(6) + ', ' + parsed.lng.toFixed(6);
+    s.units.forEach(u => { u.lat = parsed.lat; u.lng = parsed.lng; u.coords = coordsStr; });
+    renderSignages();
+    scheduleAutosave();
+  } else {
+    warnCoordsPasteFailed();
+  }
+}
+
+/* ---------- composer: drag & scale the generated sign onto the site photo ---------- */
+// จุดเดียวกันมีหลายป้าย -> เห็นหมุดทุกป้ายพร้อมกันบนรูปเดียวตั้งแต่เปิด composer เลย
+// (แก้ปัญหาเดิมที่ปักป้ายที่ 2 แล้วมองไม่เห็นว่าป้ายที่ 1 ปักไว้ตรงไหน ต้องเดาไม่ให้ทับกัน)
+// composerState.activeUnitIdx = ป้ายที่กำลังเลือกอยู่ (ใช้กับแถบเลื่อนขนาด) — ลากป้ายไหนก็ได้ตลอดเวลา ไม่ต้องเลือกก่อน
+let composerState = null;
+function openDesignComposer(signageId, unitIdx){
+  const s = signages.find(x=>x.id===signageId);
+  if(!s) return;
+  s.units = s.units && s.units.length ? s.units : [makeEmptyUnit()];
+  const bgPhoto = s.units[0] && s.units[0].locationPhoto;
+  if(!bgPhoto){ alert('กรุณาแนบรูปสถานที่จริงก่อน แล้วค่อยจัดตำแหน่งป้าย'); return; }
+  composerState = { signageId, activeUnitIdx: (unitIdx!=null && s.units[unitIdx]) ? unitIdx : 0 };
+  const bg = document.getElementById('composerBg');
+  document.getElementById('designComposerOverlay').classList.remove('hidden');
+  bg.onload = () => { renderComposerMarkers(); };
+  bg.src = bgPhoto;
+  if(bg.complete && bg.naturalWidth) renderComposerMarkers();
+}
+function closeDesignComposer(){
+  document.getElementById('designComposerOverlay').classList.add('hidden');
+  document.getElementById('composerMarkers').innerHTML = '';
+  composerState = null;
+}
+function composerMarkerGeometry_(s, u, stageW, stageH){
+  const spec = SIGN_SPECS[u.typeKey] || SIGN_SPECS.guerrilla; // แต่ละป้ายในจุดเดียวกันอาจคนละไซส์ได้
+  const width = (u.sscale!=null?u.sscale:0.32) * stageW * (spec.h/Math.max(spec.w,spec.h)) * 1.6 * (spec.w/spec.h);
+  const height = width * (spec.h/spec.w);
+  const cx = (u.sx!=null?u.sx:0.5) * stageW;
+  const cy = (u.sy!=null?u.sy:0.5) * stageH;
+  return { width, height, left: cx - width/2, top: cy - height/2 };
+}
+function renderComposerMarkers(){
+  if(!composerState) return;
+  const s = signages.find(x=>x.id===composerState.signageId);
+  if(!s) return;
+  const stage = document.getElementById('composerStage');
+  const bg = document.getElementById('composerBg');
+  const container = document.getElementById('composerMarkers');
+  const stageW = stage.clientWidth;
+  const stageH = bg.clientHeight;
+  if(!stageW || !stageH) return;
+  const units = s.units && s.units.length ? s.units : [makeEmptyUnit()];
+  container.innerHTML = '';
+  units.forEach((u, uIdx) => {
+    const g = composerMarkerGeometry_(s, u, stageW, stageH);
+    const marker = document.createElement('div');
+    marker.className = 'design';
+    marker.dataset.unitIdx = String(uIdx);
+    marker.style.width = g.width + 'px';
+    marker.style.height = g.height + 'px';
+    marker.style.left = g.left + 'px';
+    marker.style.top = g.top + 'px';
+    const label = document.createElement('div');
+    label.textContent = 'ป้ายที่ ' + (uIdx+1);
+    label.style.cssText = 'position:absolute; top:-20px; left:0; font-size:11px; font-weight:700; color:#fff; background:rgba(0,0,0,.65); padding:1px 6px; border-radius:4px; white-space:nowrap;';
+    marker.appendChild(label);
+    if(u.signPng){
+      const img = document.createElement('img');
+      img.src = u.signPng;
+      img.style.cssText = 'width:100%; height:100%; object-fit:fill; pointer-events:none; display:block;';
+      marker.appendChild(img);
+    }
+    attachComposerMarkerDrag_(marker, uIdx);
+    container.appendChild(marker);
+  });
+  applyComposerActiveStyles_();
+}
+function applyComposerActiveStyles_(){
+  if(!composerState) return;
+  const s = signages.find(x=>x.id===composerState.signageId);
+  if(!s) return;
+  const container = document.getElementById('composerMarkers');
+  Array.from(container.children).forEach(m => {
+    const isActive = parseInt(m.dataset.unitIdx,10) === composerState.activeUnitIdx;
+    m.style.zIndex = isActive ? '2' : '1';
+    m.style.outline = isActive ? '3px solid var(--gold)' : '2px dashed rgba(255,255,255,.7)';
+    m.style.outlineOffset = '2px';
+    m.style.opacity = isActive ? '1' : '.85';
+  });
+  const u = s.units[composerState.activeUnitIdx];
+  if(u) document.getElementById('designScaleSlider').value = Math.round((u.sscale!=null?u.sscale:0.32)*100);
+  const lbl = document.getElementById('composerActiveUnitLabel');
+  if(lbl) lbl.textContent = String(composerState.activeUnitIdx + 1);
+}
+function selectComposerUnit_(uIdx){
+  if(!composerState || composerState.activeUnitIdx === uIdx) return;
+  composerState.activeUnitIdx = uIdx;
+  applyComposerActiveStyles_();
+}
+function attachComposerMarkerDrag_(marker, uIdx){
+  let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+  marker.addEventListener('pointerdown', (e) => {
+    selectComposerUnit_(uIdx);
+    dragging = true;
+    try{ marker.setPointerCapture(e.pointerId); }catch(err){}
+    startX = e.clientX; startY = e.clientY;
+    origLeft = parseFloat(marker.style.left)||0;
+    origTop = parseFloat(marker.style.top)||0;
+  });
+  marker.addEventListener('pointermove', (e) => {
+    if(!dragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    marker.style.left = (origLeft + dx) + 'px';
+    marker.style.top = (origTop + dy) + 'px';
+  });
+  marker.addEventListener('pointerup', () => {
+    if(!dragging) return;
+    dragging = false;
+    saveComposerMarkerPositionToState_(marker, uIdx);
+  });
+}
+function saveComposerMarkerPositionToState_(marker, uIdx){
+  if(!composerState) return;
+  const s = signages.find(x=>x.id===composerState.signageId);
+  const u = s.units[uIdx];
+  const stage = document.getElementById('composerStage');
+  const bg = document.getElementById('composerBg');
+  const stageW = stage.clientWidth;
+  const stageH = bg.clientHeight;
+  if(!stageW || !stageH) return;
+  const width = parseFloat(marker.style.width)||0;
+  const height = parseFloat(marker.style.height)||0;
+  const left = parseFloat(marker.style.left)||0;
+  const top = parseFloat(marker.style.top)||0;
+  u.sx = (left + width/2) / stageW;
+  u.sy = (top + height/2) / stageH;
+}
+function onDesignScaleChange(val){
+  if(!composerState) return;
+  const s = signages.find(x=>x.id===composerState.signageId);
+  const u = s.units[composerState.activeUnitIdx];
+  u.sscale = val/100;
+  const stage = document.getElementById('composerStage');
+  const bg = document.getElementById('composerBg');
+  const stageW = stage.clientWidth, stageH = bg.clientHeight;
+  if(!stageW || !stageH) return;
+  const container = document.getElementById('composerMarkers');
+  const marker = Array.from(container.children).find(m => parseInt(m.dataset.unitIdx,10) === composerState.activeUnitIdx);
+  if(!marker) return;
+  const g = composerMarkerGeometry_(s, u, stageW, stageH);
+  marker.style.width = g.width + 'px';
+  marker.style.height = g.height + 'px';
+  marker.style.left = g.left + 'px';
+  marker.style.top = g.top + 'px';
+}
+async function saveDesignComposer(){
+  if(!composerState) return;
+  const { signageId } = composerState;
+  const s = signages.find(x=>x.id===signageId);
+  if(!s) return;
+  try{
+    for(let i=0; i<s.units.length; i++){ await recompositeUnit(signageId, i); }
+    closeDesignComposer();
+    renderSignages();
+    scheduleAutosave();
+    for(let i=0; i<s.units.length; i++){ await saveUnitPhotoIfBackend(signageId, i); }
+  }catch(e){
+    alert('บันทึกตำแหน่งป้ายไม่สำเร็จ: ' + e.message);
+  }
+}
+
+/* ---------- render Step 5 UI ---------- */
+
+function renderSignages(){
+  const container = document.getElementById('signageContainer');
+  container.innerHTML = '';
+  signages.forEach((s, idx) => {
+    const div = document.createElement('div');
+    div.className = 'subcard';
+    const units = s.units && s.units.length ? s.units : [makeEmptyUnit()];
+    const dupIdx = findDuplicateSignagePoint_(signages, idx);
+    const dupWarningHtml = dupIdx != null ? `<div class="hint" style="color:var(--red); font-weight:700; margin-top:2px; margin-bottom:8px;">⚠ พิกัดซ้ำกับจุดที่ ${dupIdx+1} — เช็คว่าพิมพ์/วางพิกัดผิดจุดหรือเปล่า</div>` : '';
+    const unitsHtml = units.map((u, uIdx) => {
+      const isBao = u.variant === 'bao';
+      const isCustom = u.variant === 'custom';
+      const isAnnounce = !isBao && !isCustom;
+      const unitTypeOptionsHtml = SIGNAGE_TYPES.map(t => `<option value="${t.key}" ${(u.typeKey||'guerrilla')===t.key?'selected':''}>${t.label}</option>`).join('');
+      const variantBtns = `
+        <button type="button" class="${isAnnounce?'secondary':'ghost'} small" onclick="updateUnitAndRecomposite('${s.id}',${uIdx},'variant','announce')">ประกาศวันเปิด</button>
+        <button type="button" class="${isBao?'secondary':'ghost'} small" onclick="updateUnitAndRecomposite('${s.id}',${uIdx},'variant','bao')">โปร Bao Cafe</button>
+        <button type="button" class="${isCustom?'secondary':'ghost'} small" onclick="updateUnitAndRecomposite('${s.id}',${uIdx},'variant','custom')">กำหนดเอง (ส่งต่อ MKT)</button>`;
+      const arrowBtns = SIGN_ARROWS.map(a => `<button type="button" class="${u.arrow===a.k?'secondary':'ghost'} small" onclick="updateUnitAndRecomposite('${s.id}',${uIdx},'arrow','${a.k}')">${a.t}</button>`).join(' ');
+      const distanceEnabled = u.showDistance;
+      const showArrowBtns = u.showDistance;
+      const showDistDir = distanceEnabled && u.arrow !== 'none';
+      const showLandmark = isAnnounce && u.arrow === 'none';
+
+      return `
+      <div style="border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:8px; background:#fff;">
+        <div class="hint" style="margin-bottom:6px; font-weight:600;">ป้ายที่ ${uIdx+1}${units.length>1 ? ' / '+units.length : ''}</div>
+
+        <label>เลือกแบบป้าย (ขนาด)</label>
+        <select onchange="updateUnitAndRecomposite('${s.id}',${uIdx},'typeKey',this.value)" style="margin-bottom:12px;">${unitTypeOptionsHtml}</select>
+
+        <label>รูปแบบเนื้อหา</label>
+        <div class="btn-row" style="margin-bottom:12px;">${variantBtns}</div>
+
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:12px;">
+          <input type="checkbox" ${u.showDistance ? 'checked' : ''} onchange="updateUnitAndRecomposite('${s.id}',${uIdx},'showDistance',this.checked)" style="width:auto; margin:0;">
+          <span style="font-weight:700; color:var(--amber);">แนบระยะทาง + ลูกศร ลงในอาร์ตเวิร์กป้ายนี้ด้วย</span>
+        </label>
+
+        ${distanceEnabled ? `
+        <div class="row" style="margin-bottom:12px;">
+          <div><label>ระยะทาง</label><input type="number" inputmode="decimal" min="0" step="0.1" id="distanceInput-${s.id}-${uIdx}" value="${u.distance||''}" placeholder="ไม่บังคับ" oninput="updateUnitTyped('${s.id}',${uIdx},'distance',this.value)" onblur="renderSignages()"></div>
+          <div><label>หน่วย</label><select onchange="updateUnitAndRecomposite('${s.id}',${uIdx},'unit',this.value)">
+            <option value="กม." ${u.unit!=='ม.'?'selected':''}>กม.</option>
+            <option value="ม." ${u.unit==='ม.'?'selected':''}>ม.</option>
+          </select></div>
+        </div>
+        ` : ''}
+
+        ${showArrowBtns ? `
+        <label>ลูกศร</label>
+        <div class="btn-row" style="margin-bottom:12px;">${arrowBtns}</div>
+        ` : ''}
+
+        ${showDistDir ? `
+        <label>ข้อความบอกทาง (ว่างไว้ = ใช้ข้อความอัตโนมัติ)</label>
+        <input type="text" id="dirTextInput-${s.id}-${uIdx}" value="${u.dirText||''}" placeholder="ว่างไว้ได้" oninput="updateUnitTyped('${s.id}',${uIdx},'dirText',this.value)" onblur="renderSignages()" style="margin-bottom:12px;">
+        ` : ''}
+
+        ${showLandmark ? `
+        <label>จุดสังเกต (ใส่เมื่อไม่ใช้ลูกศร)</label>
+        <input type="text" id="landmarkInput-${s.id}-${uIdx}" value="${u.landmark||''}" placeholder="เช่น ข้างหมู่บ้านพฤกษา 44" oninput="updateUnitTyped('${s.id}',${uIdx},'landmark',this.value)" onblur="renderSignages()" style="margin-bottom:12px;">
+        ` : ''}
+
+        ${isBao ? `
+        <label>อาร์ตเวิร์ก Bao Cafe จากทีมการตลาด (ถ้ามีแล้ว)</label>
+        <div class="row" style="align-items:center; margin-bottom:12px;">
+          <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="document.getElementById('artInput-${s.id}-${uIdx}').click()">📎 อัปโหลดอาร์ตเวิร์ก</button>
+            <input type="file" id="artInput-${s.id}-${uIdx}" accept="image/*" style="display:none" onchange="handleOfficialArt('${s.id}',${uIdx},this)"></div>
+          <div class="hint" style="flex:1;">${u.officialArtImg ? '✓ ใช้ไฟล์จริงแล้ว' : 'ยังไม่มี — ใช้ภาพจำลองไปก่อน ใส่ทีหลังได้ก่อนส่งโรงพิมพ์'}</div>
+        </div>
+        ` : ''}
+
+        ${isCustom ? `
+        <div class="hint" style="margin-bottom:8px;">พื้นหลังจะเป็นสีพื้นเปล่าๆ (ขนาดป้ายเท่าเดิม) — พิมพ์ข้อความที่ต้องการลงป้ายได้เลย แล้วส่งต่อให้ทีม MKT จัดหน้าให้สวยงามอีกที</div>
+        <label>ข้อความบรรทัดที่ 1 (ตัวใหญ่)</label>
+        <input type="text" id="customLine1Input-${s.id}-${uIdx}" value="${u.customLine1||''}" placeholder="เช่น เปิดใหม่ 15 ก.ย. นี้" oninput="updateUnitTyped('${s.id}',${uIdx},'customLine1',this.value)" onblur="renderSignages()" style="margin-bottom:12px;">
+        <label>ข้อความบรรทัดที่ 2 (ตัวเล็กลง — เว้นว่างได้)</label>
+        <input type="text" id="customLine2Input-${s.id}-${uIdx}" value="${u.customLine2||''}" placeholder="ว่างไว้ได้" oninput="updateUnitTyped('${s.id}',${uIdx},'customLine2',this.value)" onblur="renderSignages()" style="margin-bottom:12px;">
+        ` : ''}
+
+        ${(u.typeKey||'guerrilla') === 'guerrilla' ? `
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:8px; margin-bottom:0;">
+          <input type="checkbox" ${u.frame ? 'checked' : ''} onchange="updateSignageUnit('${s.id}',${uIdx},'frame',this.checked)" style="width:auto; margin:0;">
+          <span style="font-weight:700; color:var(--red);">ปักเสาไฟไม่ได้ — ต้องทำโครงค้ำ</span>
+        </label>
+        ` : ''}
+
+        ${u.photo ? `
+        <label style="margin-top:8px;">ตัวอย่างป้ายนี้</label>
+        <div><img src="${u.photo}" style="height:90px; border-radius:6px; border:1px solid var(--line); cursor:zoom-in;" onclick="previewPhoto(this.src)"></div>
+        ` : ''}
+        ${(units[0] && units[0].locationPhoto) ? `
+        <div class="row" style="margin-top:8px; margin-bottom:0;">
+          <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="openDesignComposer('${s.id}',${uIdx})">🎨 ปรับตำแหน่งป้ายนี้</button></div>
+          <div class="hint" style="flex:1; align-self:center;">ปรับตำแหน่งป้ายนี้ (พร้อมเห็นป้ายอื่นในจุดเดียวกันด้วย)</div>
+        </div>
+        ` : ''}
+      </div>
+    `;}).join('');
+
+    div.innerHTML = `
+      <button class="danger small remove-btn" onclick="removeSignage('${s.id}')">ลบ</button>
+      <div class="subcard-title">จุดที่ ${idx+1}</div>
+      <div class="row">
+        <div><label>จำนวน (ป้าย)</label><input type="number" min="1" value="${s.qty}" oninput="updateSignage('${s.id}','qty',this.value)"></div>
+      </div>
+      <div class="hint" style="margin:8px 0;">1 จุด = 1 พิกัด + 1 รูปสถานที่จริง ใช้ร่วมกันทุกป้าย — ส่วนแบบป้าย/ขนาด/ลูกศร/ระยะทางเลือกแยกทีละป้ายได้ด้านล่าง (จุดเดียวกันมีป้ายคนละไซส์ได้)</div>
+      <div class="row" style="align-items:flex-end;">
+        <div><label>พิกัด (lat, long)</label><input type="text" value="${(units[0]&&units[0].coords)||''}" placeholder="เช่น 12.674625, 101.272150" oninput="updateSignageCoords('${s.id}',this.value)" onpaste="handleSignageCoordsPaste(event,'${s.id}')"></div>
+        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="useGPSForSignage('${s.id}')">📍 ใช้ตำแหน่งปัจจุบัน</button></div>
+      </div>
+      <div class="hint" style="margin-top:2px; margin-bottom:8px;">พิมพ์เองได้ (ถ้าไม่ได้ปักหน้างาน) หรือวางลิงก์/พิกัดที่แชร์จาก LINE ได้เลย — รองรับทั้งแบบทศนิยมและแบบองศา (เช่น 13°21'25.2"N 99°56'12.6"E) ระบบจะแยกพิกัดให้อัตโนมัติ</div>
+      ${dupWarningHtml}
+      <label>รูปสถานที่จริง (1 รูปต่อจุด — ใช้ร่วมกันทุกป้ายในจุดนี้)</label>
+      <div class="row" style="align-items:center;">
+        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="document.getElementById('locPhotoInput-${s.id}').click()">📎 แนบรูปสถานที่จริง</button>
+          <input type="file" id="locPhotoInput-${s.id}" accept="image/*" capture="environment" style="display:none" onchange="handleSignageLocationPhoto('${s.id}',this)"></div>
+        ${(units[0]&&units[0].locationPhoto) ? `<div style="flex:0 0 auto;"><img src="${units[0].locationPhoto}" style="height:56px; border-radius:6px; border:1px solid var(--line); cursor:zoom-in;" onclick="previewPhoto(this.src)"></div><div style="flex:0 0 auto;"><button class="danger small" onclick="removeSignagePhoto('${s.id}')">ลบรูป</button></div>` : '<div class="hint" style="flex:1;">ยังไม่ได้แนบรูป — ระบบจะจับพิกัด GPS ให้อัตโนมัติตอนแนบ (ถ้ายังไม่มีพิกัด)</div>'}
+      </div>
+      ${photoStatusBadgeForStatus_(pointPhotoStatus_(s), "retryPointPhotoSave('" + s.id + "')")}
+      <div class="row" style="margin-top:6px; margin-bottom:8px;">
+        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="openDesignComposer('${s.id}',0)">🎨 ปรับตำแหน่งป้ายทุกป้ายบนรูปเดียว (ลากวางได้)</button></div>
+        <div class="hint" style="flex:1; align-self:center;">${(units[0]&&units[0].locationPhoto) ? 'เห็นทุกป้ายพร้อมกัน ลากจัดตำแหน่งทีละป้ายได้เลย' : 'แนบรูปสถานที่จริงก่อน ถึงจะจัดตำแหน่งได้'}</div>
+      </div>
+      ${unitsHtml}
+      <label>หมายเหตุ (เหตุผลเลือกจุดนี้ — รวมทั้งจุด)</label>
+      <input type="text" value="${s.notes}" oninput="updateSignage('${s.id}','notes',this.value)">
+    `;
+    container.appendChild(div);
+  });
+}
+
+// ---------- Help checklist ----------
+function addHelpItem(name, qty){
+  helpItems.push({id:'h'+Date.now()+Math.random(), name, qty});
+  renderHelp();
+  scheduleAutosave();
+}
+function removeHelpItem(id){
+  const idx = helpItems.findIndex(h=>h.id===id);
+  if(idx>-1) helpItems.splice(idx,1);
+  renderHelp();
+  scheduleAutosave();
+}
+function updateHelpItem(id, field, value){
+  const h = helpItems.find(h=>h.id===id);
+  if(h) h[field] = value;
+  scheduleAutosave();
+}
+function renderHelp(){
+  const container = document.getElementById('helpContainer');
+  container.innerHTML = '';
+  helpItems.forEach(h => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.marginBottom = '0';
+    row.innerHTML = `
+      <div style="flex:3;"><input type="text" value="${h.name}" placeholder="รายการ" oninput="updateHelpItem('${h.id}','name',this.value)"></div>
+      <div style="flex:1;"><input type="text" value="${h.qty}" placeholder="จำนวน" oninput="updateHelpItem('${h.id}','qty',this.value)"></div>
+      <div style="flex:0 0 auto;"><button class="danger small" onclick="removeHelpItem('${h.id}')">×</button></div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+// ---------- Hotel / accommodation ----------
+function makeEmptyHotel(){
+  return {
+    id: 'ho' + Date.now() + Math.random(),
+    name: '', phone: '',
+    pricePerNight: '', capacity: '', notes: '',
+    coords: '', lat: null, lng: null,
+    photo: ''
+  };
+}
+function addHotel(){
+  hotels.push(makeEmptyHotel());
+  renderHotels();
+  scheduleAutosave();
+}
+function removeHotel(id){
+  const idx = hotels.findIndex(h=>h.id===id);
+  if(idx>-1) hotels.splice(idx,1);
+  renderHotels();
+  scheduleAutosave();
+}
+// พิมพ์ในช่องข้อความ/ตัวเลข -> อัปเดตข้อมูลอย่างเดียว ไม่รีเฟรชทั้งการ์ดระหว่างพิมพ์
+// (กันปัญหาจอเด้งกลับไปโรงแรมอันแรกเวลามีหลายอันแล้วพิมพ์อันท้ายๆ — เหมือนบั๊กช่อง "ระยะ" ของป้าย)
+function updateHotelTyped(id, field, value){
+  const h = hotels.find(h=>h.id===id);
+  if(!h) return;
+  h[field] = value;
+  if(field === 'coords'){
+    const parsed = parseCoordsText(value);
+    if(parsed){ h.lat = parsed.lat; h.lng = parsed.lng; }
+    else { h.lat = null; h.lng = null; }
+  }
+  scheduleAutosave();
+}
+function useGPSForHotel(id){
+  if(!navigator.geolocation){ alert('เบราว์เซอร์นี้ไม่รองรับ GPS'); return; }
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const h = hotels.find(h=>h.id===id);
+    if(!h) return;
+    h.lat = pos.coords.latitude; h.lng = pos.coords.longitude;
+    h.coords = h.lat.toFixed(6) + ', ' + h.lng.toFixed(6);
+    renderHotels();
+    scheduleAutosave();
+    warnIfGpsAccuracyPoor(pos.coords.accuracy);
+  }, () => alert('ดึงตำแหน่งปัจจุบันไม่สำเร็จ'), { enableHighAccuracy: true, timeout: 10000 });
+}
+function handleHotelCoordsPaste(ev, id){
+  const text = (ev.clipboardData || window.clipboardData).getData('text');
+  const parsed = parseCoordsText(text);
+  if(parsed){
+    ev.preventDefault();
+    const h = hotels.find(h=>h.id===id);
+    if(!h) return;
+    h.lat = parsed.lat; h.lng = parsed.lng;
+    h.coords = parsed.lat.toFixed(6) + ', ' + parsed.lng.toFixed(6);
+    renderHotels();
+    scheduleAutosave();
+  } else {
+    warnCoordsPasteFailed();
+  }
+}
+async function saveHotelPhotoIfBackend(id){
+  const h = hotels.find(h=>h.id===id);
+  if(!h || typeof savePhotoToSheet !== 'function') return;
+  const ownerId = 'hotel::' + id;
+  photoSaveStatus[ownerId] = 'saving';
+  try{
+    await savePhotoToSheet(ownerId, h.photo);
+    photoSaveStatus[ownerId] = 'ok';
+  }catch(e){
+    photoSaveStatus[ownerId] = 'failed';
+    console.error('บันทึกรูปโรงแรม/ที่พักไม่สำเร็จ:', e.message);
+  }
+  renderHotels();
+}
+function retryHotelPhotoSave(id){
+  saveHotelPhotoIfBackend(id);
+}
+async function handleHotelPhoto(id, input){
+  const file = input.files[0];
+  if(!file) return;
+  const h = hotels.find(h=>h.id===id);
+  if(!h) return;
+  try{
+    h.photo = await compressImage(file, 1000, 0.65);
+    renderHotels();
+    saveHotelPhotoIfBackend(id);
+    scheduleAutosave();
+  }catch(e){ alert('แนบรูปไม่สำเร็จ: ' + e.message); }
+}
+async function removeHotelPhoto(id){
+  const h = hotels.find(h=>h.id===id);
+  if(!h) return;
+  h.photo = '';
+  renderHotels();
+  scheduleAutosave();
+  try{ await saveHotelPhotoIfBackend(id); }catch(e){ console.error('ลบรูปจาก Sheet ไม่สำเร็จ:', e.message); }
+}
+function renderHotels(){
+  const container = document.getElementById('hotelContainer');
+  if(!container) return;
+  container.innerHTML = '';
+  hotels.forEach((h, idx) => {
+    const div = document.createElement('div');
+    div.className = 'subcard';
+    div.innerHTML = `
+      <button class="danger small remove-btn" onclick="removeHotel('${h.id}')">ลบ</button>
+      <div class="subcard-title">โรงแรม/ที่พัก ${idx+1}</div>
+      <div class="row">
+        <div><label>ชื่อโรงแรม (ถ้ามี)</label><input type="text" value="${h.name||''}" placeholder="เช่น โรงแรม ABC" oninput="updateHotelTyped('${h.id}','name',this.value)" onblur="renderHotels()"></div>
+        <div><label>เบอร์โรงแรม (ถ้ามี)</label><input type="text" value="${h.phone||''}" placeholder="เช่น 038-123-456" oninput="updateHotelTyped('${h.id}','phone',this.value)" onblur="renderHotels()"></div>
+      </div>
+      <div class="row">
+        <div><label>ราคาต่อคืน</label><input type="text" value="${h.pricePerNight||''}" placeholder="เช่น 800 บาท" oninput="updateHotelTyped('${h.id}','pricePerNight',this.value)" onblur="renderHotels()"></div>
+        <div><label>ต่อกี่คน/ห้อง</label><input type="text" value="${h.capacity||''}" placeholder="เช่น 2 คน/ห้อง" oninput="updateHotelTyped('${h.id}','capacity',this.value)" onblur="renderHotels()"></div>
+      </div>
+      <label>รายละเอียด/เงื่อนไขอื่นๆ (ถ้ามี)</label>
+      <textarea placeholder="เช่น รวมอาหารเช้า, จ่ายเงินสดหน้างาน, ต้องจองล่วงหน้า ฯลฯ" oninput="updateHotelTyped('${h.id}','notes',this.value)" onblur="renderHotels()">${h.notes||''}</textarea>
+      <div class="row" style="align-items:flex-end; margin-bottom:0;">
+        <div><label>พิกัด (lat, long)</label><input type="text" value="${h.coords||''}" placeholder="เช่น 12.674625, 101.272150" oninput="updateHotelTyped('${h.id}','coords',this.value)" onblur="renderHotels()" onpaste="handleHotelCoordsPaste(event,'${h.id}')"></div>
+        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="useGPSForHotel('${h.id}')">📍 ใช้ตำแหน่งปัจจุบัน</button></div>
+      </div>
+      <div class="hint" style="margin-top:2px; margin-bottom:8px;">พิมพ์เองได้ หรือวางลิงก์/พิกัดที่แชร์จาก LINE ได้เลย — ไม่ปักก็ได้ ไม่บังคับ</div>
+      <label style="margin-top:8px;">รูปโรงแรม (ถ้ามี)</label>
+      <div class="row" style="align-items:center; margin-bottom:0;">
+        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="document.getElementById('hotelPhotoInput-${h.id}').click()">📎 แนบรูปโรงแรม</button>
+          <input type="file" id="hotelPhotoInput-${h.id}" accept="image/*" capture="environment" style="display:none" onchange="handleHotelPhoto('${h.id}',this)"></div>
+        ${h.photo ? `<div style="flex:0 0 auto;"><img src="${h.photo}" style="height:56px; border-radius:6px; border:1px solid var(--line); cursor:zoom-in;" onclick="previewPhoto(this.src)"></div><div style="flex:0 0 auto;"><button class="danger small" onclick="removeHotelPhoto('${h.id}')">ลบรูป</button></div>` : '<div class="hint" style="flex:1;">ไม่แนบก็ได้</div>'}
+      </div>
+      ${photoStatusBadgeHtml_('hotel::' + h.id, "retryHotelPhotoSave('" + h.id + "')")}
+    `;
+    container.appendChild(div);
+  });
+  if(hotels.length===0) container.innerHTML = '<div class="hint">ยังไม่มีโรงแรม/ที่พัก — กด "+ เพิ่มโรงแรม/ที่พัก" ถ้ามีให้กรอก (ไม่บังคับ)</div>';
+}
+
+// ---------- Employee parking ----------
+function makeEmptyParking(){
+  return {
+    id: 'pk' + Date.now() + Math.random(),
+    motorcycleCount: '', carCount: '', notes: '',
+    coords: '', lat: null, lng: null,
+    photo: ''
+  };
+}
+function addParking(){
+  parkings.push(makeEmptyParking());
+  renderParkings();
+  scheduleAutosave();
+}
+function removeParking(id){
+  const idx = parkings.findIndex(p=>p.id===id);
+  if(idx>-1) parkings.splice(idx,1);
+  renderParkings();
+  scheduleAutosave();
+}
+function updateParkingTyped(id, field, value){
+  const p = parkings.find(p=>p.id===id);
+  if(!p) return;
+  p[field] = value;
+  if(field === 'coords'){
+    const parsed = parseCoordsText(value);
+    if(parsed){ p.lat = parsed.lat; p.lng = parsed.lng; }
+    else { p.lat = null; p.lng = null; }
+  }
+  scheduleAutosave();
+}
+function useGPSForParking(id){
+  if(!navigator.geolocation){ alert('เบราว์เซอร์นี้ไม่รองรับ GPS'); return; }
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const p = parkings.find(p=>p.id===id);
+    if(!p) return;
+    p.lat = pos.coords.latitude; p.lng = pos.coords.longitude;
+    p.coords = p.lat.toFixed(6) + ', ' + p.lng.toFixed(6);
+    renderParkings();
+    scheduleAutosave();
+    warnIfGpsAccuracyPoor(pos.coords.accuracy);
+  }, () => alert('ดึงตำแหน่งปัจจุบันไม่สำเร็จ'), { enableHighAccuracy: true, timeout: 10000 });
+}
+function handleParkingCoordsPaste(ev, id){
+  const text = (ev.clipboardData || window.clipboardData).getData('text');
+  const parsed = parseCoordsText(text);
+  if(parsed){
+    ev.preventDefault();
+    const p = parkings.find(p=>p.id===id);
+    if(!p) return;
+    p.lat = parsed.lat; p.lng = parsed.lng;
+    p.coords = parsed.lat.toFixed(6) + ', ' + parsed.lng.toFixed(6);
+    renderParkings();
+    scheduleAutosave();
+  } else {
+    warnCoordsPasteFailed();
+  }
+}
+async function saveParkingPhotoIfBackend(id){
+  const p = parkings.find(p=>p.id===id);
+  if(!p || typeof savePhotoToSheet !== 'function') return;
+  const ownerId = 'parking::' + id;
+  photoSaveStatus[ownerId] = 'saving';
+  try{
+    await savePhotoToSheet(ownerId, p.photo);
+    photoSaveStatus[ownerId] = 'ok';
+  }catch(e){
+    photoSaveStatus[ownerId] = 'failed';
+    console.error('บันทึกรูปที่จอดรถไม่สำเร็จ:', e.message);
+  }
+  renderParkings();
+}
+function retryParkingPhotoSave(id){
+  saveParkingPhotoIfBackend(id);
+}
+async function handleParkingPhoto(id, input){
+  const file = input.files[0];
+  if(!file) return;
+  const p = parkings.find(p=>p.id===id);
+  if(!p) return;
+  try{
+    p.photo = await compressImage(file, 1000, 0.65);
+    renderParkings();
+    saveParkingPhotoIfBackend(id);
+    scheduleAutosave();
+  }catch(e){ alert('แนบรูปไม่สำเร็จ: ' + e.message); }
+}
+async function removeParkingPhoto(id){
+  const p = parkings.find(p=>p.id===id);
+  if(!p) return;
+  p.photo = '';
+  renderParkings();
+  scheduleAutosave();
+  try{ await saveParkingPhotoIfBackend(id); }catch(e){ console.error('ลบรูปจาก Sheet ไม่สำเร็จ:', e.message); }
+}
+function renderParkings(){
+  const container = document.getElementById('parkingContainer');
+  if(!container) return;
+  container.innerHTML = '';
+  parkings.forEach((p, idx) => {
+    const div = document.createElement('div');
+    div.className = 'subcard';
+    div.innerHTML = `
+      <button class="danger small remove-btn" onclick="removeParking('${p.id}')">ลบ</button>
+      <div class="subcard-title">ที่จอดรถ ${idx+1}</div>
+      <div class="row">
+        <div><label>จอดมอเตอร์ไซค์ได้กี่คัน</label><input type="text" inputmode="numeric" value="${p.motorcycleCount||''}" placeholder="เช่น 10" oninput="updateParkingTyped('${p.id}','motorcycleCount',this.value)" onblur="renderParkings()"></div>
+        <div><label>จอดรถยนต์ได้กี่คัน</label><input type="text" inputmode="numeric" value="${p.carCount||''}" placeholder="เช่น 5" oninput="updateParkingTyped('${p.id}','carCount',this.value)" onblur="renderParkings()"></div>
+      </div>
+      <label>เงื่อนไข/รายละเอียดเพิ่มเติม (ถ้ามี)</label>
+      <textarea placeholder="เช่น จอดได้เฉพาะเวลากลางวัน, ต้องขออนุญาตเจ้าของที่ก่อน ฯลฯ" oninput="updateParkingTyped('${p.id}','notes',this.value)" onblur="renderParkings()">${p.notes||''}</textarea>
+      <div class="row" style="align-items:flex-end; margin-bottom:0;">
+        <div><label>พิกัด (lat, long)</label><input type="text" value="${p.coords||''}" placeholder="เช่น 12.674625, 101.272150" oninput="updateParkingTyped('${p.id}','coords',this.value)" onblur="renderParkings()" onpaste="handleParkingCoordsPaste(event,'${p.id}')"></div>
+        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="useGPSForParking('${p.id}')">📍 ใช้ตำแหน่งปัจจุบัน</button></div>
+      </div>
+      <div class="hint" style="margin-top:2px; margin-bottom:8px;">พิมพ์เองได้ หรือวางลิงก์/พิกัดที่แชร์จาก LINE ได้เลย — ไม่ปักก็ได้ ไม่บังคับ</div>
+      <label style="margin-top:8px;">รูปที่จอดรถ (ถ้ามี)</label>
+      <div class="row" style="align-items:center; margin-bottom:0;">
+        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="document.getElementById('parkingPhotoInput-${p.id}').click()">📎 แนบรูป</button>
+          <input type="file" id="parkingPhotoInput-${p.id}" accept="image/*" capture="environment" style="display:none" onchange="handleParkingPhoto('${p.id}',this)"></div>
+        ${p.photo ? `<div style="flex:0 0 auto;"><img src="${p.photo}" style="height:56px; border-radius:6px; border:1px solid var(--line); cursor:zoom-in;" onclick="previewPhoto(this.src)"></div><div style="flex:0 0 auto;"><button class="danger small" onclick="removeParkingPhoto('${p.id}')">ลบรูป</button></div>` : '<div class="hint" style="flex:1;">ไม่แนบก็ได้</div>'}
+      </div>
+      ${photoStatusBadgeHtml_('parking::' + p.id, "retryParkingPhotoSave('" + p.id + "')")}
+    `;
+    container.appendChild(div);
+  });
+  if(parkings.length===0) container.innerHTML = '<div class="hint">ยังไม่มีที่จอดรถ — กด "+ เพิ่มที่จอดรถ" ถ้ามีให้กรอก (ไม่บังคับ)</div>';
+}
+
+// ---------- Activity layout (floor-plan photo + colored symbol markers + legend) ----------
+const LAYOUT_SYMBOLS = [
+  {k:'dot', t:'จุดกลม'}, {k:'star', t:'ดาว'}, {k:'heart', t:'หัวใจ'}, {k:'square', t:'จัตุรัส'}, {k:'rect', t:'ผืนผ้า (ใส่สัดส่วนได้)'}, {k:'triangle', t:'สามเหลี่ยม'}
+];
+// ขนาด = ค่าเปอร์เซ็นต์ (100 = ปกติ) ปรับต่อเนื่องด้วยแถบเลื่อนแบบเดียวกับขนาดป้าย
+const LAYOUT_SIZE_MIN = 40, LAYOUT_SIZE_MAX = 250;
+function layoutMarkerSizeMult(size){
+  const n = parseFloat(size);
+  return (isNaN(n) ? 100 : n) / 100;
+}
+// ใช้แสดงในรายการข้อความ (legend) ที่ไม่มีสีสัน/รูปทรงให้ดู — ครอบคลุมทุกทรง
+function layoutSymbolGlyph(sym){
+  return sym==='star' ? '★' : sym==='heart' ? '♥' : sym==='square' ? '■' : sym==='rect' ? '▬' : sym==='triangle' ? '▲' : '●';
+}
+// รูปทรง SVG จริงของแต่ละสัญลักษณ์ (viewBox 0 0 100 100) — ใช้ทั้งตอนปักจุดในเว็บ ให้เห็นทรงจริงเป๊ะๆ
+function layoutMarkerShapeSvg_(symbol){
+  if(symbol === 'square' || symbol === 'rect') return '<rect x="3" y="3" width="94" height="94" rx="6"></rect>';
+  if(symbol === 'triangle') return '<polygon points="50,4 96,92 4,92"></polygon>';
+  if(symbol === 'star') return '<polygon points="50,4 61,37 96,37 68,58 79,92 50,71 21,92 32,58 4,37 39,37"></polygon>';
+  if(symbol === 'heart') return '<path d="M50,90 C22,68 4,48 4,29 C4,13 16,3 31,3 C41,3 48,9 50,19 C52,9 59,3 69,3 C84,3 96,13 96,29 C96,48 78,68 50,90 Z"></path>';
+  return '<circle cx="50" cy="50" r="47"></circle>';
+}
+function makeLayoutMarker(x, y){
+  return { id:'lm'+Date.now()+Math.random(), symbol:'dot', color:'#E4002B', size:100, ratioW:2, ratioH:1, x: x!=null?x:0.5, y: y!=null?y:0.5, label:'', desc:'' };
+}
+async function saveActivityLayoutPhotoIfBackend(){
+  if(typeof savePhotoToSheet !== 'function') return;
+  const ownerId = 'activityLayout';
+  photoSaveStatus[ownerId] = 'saving';
+  try{
+    await savePhotoToSheet(ownerId, activityLayout.photo);
+    photoSaveStatus[ownerId] = 'ok';
+  }catch(e){
+    photoSaveStatus[ownerId] = 'failed';
+    console.error('บันทึกรูป Layout กิจกรรมไม่สำเร็จ:', e.message);
+  }
+  renderActivitySection();
+}
+function retryActivityLayoutPhotoSave(){
+  saveActivityLayoutPhotoIfBackend();
+}
+async function handleActivityLayoutPhoto(input){
+  const file = input.files[0];
+  if(!file) return;
+  try{
+    activityLayout.photo = await compressImage(file, 1400, 0.7);
+    renderActivitySection();
+    saveActivityLayoutPhotoIfBackend();
+    scheduleAutosave();
+  }catch(e){ alert('แนบรูปไม่สำเร็จ: ' + e.message); }
+}
+async function removeActivityLayoutPhoto(){
+  if(!confirm('ลบรูป Layout นี้? (จุดที่ปักไว้ทั้งหมดจะหายไปด้วย)')) return;
+  activityLayout.photo = ''; activityLayout.markers = [];
+  renderActivitySection();
+  scheduleAutosave();
+  try{ await saveActivityLayoutPhotoIfBackend(); }catch(e){ console.error('ลบรูปจาก Sheet ไม่สำเร็จ:', e.message); }
+}
+function setActivityLayoutSlideMode(v){
+  activityLayout.slideLayout = v;
+  scheduleAutosave();
+}
+function renderActivitySection(){
+  const box = document.getElementById('activityLayoutBox');
+  if(!box) return;
+  if(!activityLayout.photo){
+    box.innerHTML = `
+      <div class="row" style="align-items:center; margin-bottom:0;">
+        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="document.getElementById('activityLayoutInput').click()">📎 แนบรูป Layout ผังงาน</button>
+          <input type="file" id="activityLayoutInput" accept="image/*" style="display:none" onchange="handleActivityLayoutPhoto(this)"></div>
+        <div class="hint" style="flex:1;">ไม่แนบก็ได้</div>
+      </div>
+    `;
+    return;
+  }
+  box.innerHTML = `
+    <div class="row" style="align-items:center; margin-bottom:10px;">
+      <div style="flex:0 0 auto;"><img src="${activityLayout.photo}" style="height:90px; border-radius:6px; border:1px solid var(--line); cursor:zoom-in;" onclick="previewPhoto(this.src)"></div>
+      <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="openLayoutComposer()">📍 ปักจุด/แก้ไข (${activityLayout.markers.length} จุด)</button></div>
+      <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="document.getElementById('activityLayoutInput').click()">🔄 เปลี่ยนรูป</button>
+        <input type="file" id="activityLayoutInput" accept="image/*" style="display:none" onchange="handleActivityLayoutPhoto(this)"></div>
+      <div style="flex:0 0 auto;"><button class="danger small" onclick="removeActivityLayoutPhoto()">ลบรูป Layout</button></div>
+    </div>
+    ${photoStatusBadgeHtml_('activityLayout', 'retryActivityLayoutPhotoSave()')}
+    <label>รูปแบบสไลด์ (ตอนสร้าง PPT)</label>
+    <select onchange="setActivityLayoutSlideMode(this.value)" style="max-width:380px;">
+      <option value="top" ${activityLayout.slideLayout!=='left'?'selected':''}>Layout ด้านบน + รายละเอียดด้านล่าง</option>
+      <option value="left" ${activityLayout.slideLayout==='left'?'selected':''}>Layout ด้านซ้าย + รายละเอียดเล็กๆด้านขวา</option>
+    </select>
+  `;
+}
+let layoutComposerDragHandlersAttached = false;
+function openLayoutComposer(){
+  if(!activityLayout.photo){ alert('แนบรูป Layout ก่อน'); return; }
+  const bg = document.getElementById('layoutComposerBg');
+  bg.src = activityLayout.photo;
+  bg.onload = renderLayoutComposerMarkers;
+  document.getElementById('layoutComposerOverlay').classList.remove('hidden');
+  if(!layoutComposerDragHandlersAttached){ setupLayoutComposerDrag(); layoutComposerDragHandlersAttached = true; }
+  renderLayoutComposerMarkers();
+  renderLayoutMarkerList();
+}
+function closeLayoutComposer(){
+  document.getElementById('layoutComposerOverlay').classList.add('hidden');
+  renderActivitySection();
+  scheduleAutosave();
+}
+function addLayoutMarkerAtCenter(){
+  activityLayout.markers.push(makeLayoutMarker(0.5, 0.5));
+  renderLayoutComposerMarkers();
+  renderLayoutMarkerList();
+  scheduleAutosave();
+}
+function removeLayoutMarker(id){
+  const idx = activityLayout.markers.findIndex(m=>m.id===id);
+  if(idx>-1) activityLayout.markers.splice(idx,1);
+  renderLayoutComposerMarkers();
+  renderLayoutMarkerList();
+  scheduleAutosave();
+}
+function updateLayoutMarkerField(id, field, value){
+  const m = activityLayout.markers.find(m=>m.id===id);
+  if(!m) return;
+  m[field] = value;
+  scheduleAutosave();
+}
+function renderLayoutComposerMarkers(){
+  const stage = document.getElementById('layoutComposerStage');
+  const bg = document.getElementById('layoutComposerBg');
+  if(!stage || !bg) return;
+  stage.querySelectorAll('.layout-marker').forEach(el=>el.remove());
+  const stageW = stage.clientWidth, stageH = bg.clientHeight;
+  if(!stageW || !stageH) return;
+  activityLayout.markers.forEach(m => {
+    const el = document.createElement('div');
+    el.className = 'layout-marker';
+    el.dataset.id = m.id;
+    const mult = layoutMarkerSizeMult(m.size);
+    const base = 30 * mult;
+    let w = base, h = base;
+    if(m.symbol === 'rect'){
+      const rw = Math.max(1, parseFloat(m.ratioW)||2), rh = Math.max(1, parseFloat(m.ratioH)||1);
+      if(rw >= rh){ w = base * (rw/rh); h = base; } else { w = base; h = base * (rh/rw); }
+    }
+    el.style.cssText = 'position:absolute; width:' + w + 'px; height:' + h + 'px; margin-left:' + (-w/2) + 'px; margin-top:' + (-h/2) + 'px; left:' + (m.x*stageW) + 'px; top:' + (m.y*stageH) + 'px; cursor:grab; user-select:none; touch-action:none; filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));';
+    const labelSvg = m.label ? ('<text x="50" y="60" text-anchor="middle" font-size="34" font-weight="700" fill="#fff">' + m.label + '</text>') : '';
+    el.innerHTML = '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%; height:100%; display:block; overflow:visible;"><g fill="' + (m.color||'#E4002B') + '" stroke="rgba(0,0,0,.3)" stroke-width="3">' + layoutMarkerShapeSvg_(m.symbol) + '</g>' + labelSvg + '</svg>';
+    stage.appendChild(el);
+  });
+}
+function setupLayoutComposerDrag(){
+  const stage = document.getElementById('layoutComposerStage');
+  let dragging = null, moved = false, startX=0, startY=0, origLeft=0, origTop=0;
+  stage.addEventListener('pointerdown', (e) => {
+    const el = e.target.closest('.layout-marker');
+    if(!el) return;
+    dragging = el; moved = false;
+    try{ el.setPointerCapture(e.pointerId); }catch(err){}
+    startX = e.clientX; startY = e.clientY;
+    origLeft = parseFloat(el.style.left)||0;
+    origTop = parseFloat(el.style.top)||0;
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if(!dragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if(Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
+    dragging.style.left = (origLeft + dx) + 'px';
+    dragging.style.top = (origTop + dy) + 'px';
+  });
+  stage.addEventListener('pointerup', () => {
+    if(!dragging) return;
+    const id = dragging.dataset.id;
+    const m = activityLayout.markers.find(m=>m.id===id);
+    const bg = document.getElementById('layoutComposerBg');
+    const stageW = stage.clientWidth, stageH = bg.clientHeight;
+    if(m && stageW && stageH){
+      m.x = (parseFloat(dragging.style.left) + dragging.offsetWidth/2) / stageW;
+      m.y = (parseFloat(dragging.style.top) + dragging.offsetHeight/2) / stageH;
+    }
+    dragging = null;
+    scheduleAutosave();
+  });
+  // คลิกพื้นที่ว่างบนรูป (ไม่ใช่จุดเดิม) -> เพิ่มจุดใหม่ตรงตำแหน่งที่คลิก
+  stage.addEventListener('click', (e) => {
+    if(e.target.closest('.layout-marker') || moved){ moved = false; return; }
+    const bg = document.getElementById('layoutComposerBg');
+    const rect = stage.getBoundingClientRect();
+    const stageW = stage.clientWidth, stageH = bg.clientHeight;
+    if(!stageW || !stageH) return;
+    const x = (e.clientX - rect.left) / stageW;
+    const y = (e.clientY - rect.top) / stageH;
+    activityLayout.markers.push(makeLayoutMarker(Math.min(Math.max(x,0),1), Math.min(Math.max(y,0),1)));
+    renderLayoutComposerMarkers();
+    renderLayoutMarkerList();
+    scheduleAutosave();
+  });
+}
+function renderLayoutMarkerList(){
+  const box = document.getElementById('layoutMarkerList');
+  if(!box) return;
+  box.innerHTML = '';
+  activityLayout.markers.forEach((m) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'border:1px solid var(--line); border-radius:8px; padding:8px; margin-bottom:8px; background:#fff;';
+    const isRect = m.symbol === 'rect';
+    row.innerHTML = `
+      <div class="row" style="margin-bottom:6px; align-items:center;">
+        <div style="flex:0 0 auto;"><input type="color" value="${m.color}" style="width:38px; height:32px; padding:2px; margin-bottom:0;" onchange="updateLayoutMarkerField('${m.id}','color',this.value); renderLayoutComposerMarkers();"></div>
+        <div style="flex:0 0 auto;"><select style="margin-bottom:0; width:auto;" onchange="updateLayoutMarkerField('${m.id}','symbol',this.value); renderLayoutComposerMarkers(); renderLayoutMarkerList();">
+          ${LAYOUT_SYMBOLS.map(s=>`<option value="${s.k}" ${m.symbol===s.k?'selected':''}>${s.t}</option>`).join('')}
+        </select></div>
+        <div style="flex:1; min-width:80px;"><input type="text" value="${m.label||''}" placeholder="ข้อความสั้นๆบนจุด เช่น 1 หรือ SMA1" oninput="updateLayoutMarkerField('${m.id}','label',this.value)" onblur="renderLayoutComposerMarkers()" style="margin-bottom:0;"></div>
+        <div style="flex:0 0 auto;"><button class="danger small" type="button" onclick="removeLayoutMarker('${m.id}')">×</button></div>
+      </div>
+      <div class="row" style="margin-bottom:6px; align-items:center;">
+        <div style="flex:0 0 auto; font-size:12.5px; color:var(--muted); white-space:nowrap;">ขนาด (เล็ก ↔ ใหญ่)</div>
+        <div style="flex:1; min-width:120px;"><input type="range" min="${LAYOUT_SIZE_MIN}" max="${LAYOUT_SIZE_MAX}" value="${m.size||100}" style="margin-bottom:0;" oninput="updateLayoutMarkerField('${m.id}','size',this.value); renderLayoutComposerMarkers(); document.getElementById('layoutSizeVal-${m.id}').textContent=this.value+'%';"></div>
+        <div id="layoutSizeVal-${m.id}" style="flex:0 0 auto; font-size:12.5px; color:var(--muted); width:44px; text-align:right;">${m.size||100}%</div>
+      </div>
+      ${isRect ? `
+      <div class="row" style="margin-bottom:6px; align-items:center;">
+        <div style="flex:0 0 auto; font-size:12.5px; color:var(--muted);">สัดส่วน กว้าง : สูง</div>
+        <div style="flex:0 0 auto; width:60px;"><input type="number" min="1" step="0.5" value="${m.ratioW||2}" oninput="updateLayoutMarkerField('${m.id}','ratioW',this.value)" onblur="renderLayoutComposerMarkers()" style="margin-bottom:0;"></div>
+        <div style="flex:0 0 auto;">:</div>
+        <div style="flex:0 0 auto; width:60px;"><input type="number" min="1" step="0.5" value="${m.ratioH||1}" oninput="updateLayoutMarkerField('${m.id}','ratioH',this.value)" onblur="renderLayoutComposerMarkers()" style="margin-bottom:0;"></div>
+      </div>
+      ` : ''}
+      <input type="text" value="${m.desc||''}" placeholder="ความหมายของจุดนี้ เช่น พื้นที่เช่าประจำ SMA1" oninput="updateLayoutMarkerField('${m.id}','desc',this.value)" style="margin-bottom:0;">
+    `;
+    box.appendChild(row);
+  });
+  if(activityLayout.markers.length===0) box.innerHTML = '<div class="hint">ยังไม่มีจุด — คลิกบนรูป หรือกด "+ เพิ่มจุด" ด้านล่าง</div>';
+}
+// rw/rh = ครึ่งความกว้าง/ครึ่งความสูงของตัวสัญลักษณ์ (แยกกัน เพื่อรองรับผืนผ้าที่ไม่ใช่สัดส่วน 1:1)
+function drawLayoutMarkerShape_(ctx, symbol, cx, cy, rw, rh, color){
+  const r = Math.min(rw, rh); // ใช้กับทรงที่ต้องสมมาตร (จุดกลม/ดาว/หัวใจ/สามเหลี่ยม)
+  ctx.fillStyle = color; ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = Math.max(1, r*0.08);
+  ctx.beginPath();
+  if(symbol === 'square' || symbol === 'rect'){
+    ctx.rect(cx-rw, cy-rh, rw*2, rh*2);
+  } else if(symbol === 'triangle'){
+    ctx.moveTo(cx, cy-r); ctx.lineTo(cx+r*0.95, cy+r*0.8); ctx.lineTo(cx-r*0.95, cy+r*0.8); ctx.closePath();
+  } else if(symbol === 'star'){
+    const spikes = 5, outerR = r, innerR = r*0.45;
+    let rot = Math.PI/2*3, x = cx, y = cy;
+    const step = Math.PI/spikes;
+    ctx.moveTo(cx, cy-outerR);
+    for(let i=0; i<spikes; i++){
+      x = cx + Math.cos(rot)*outerR; y = cy + Math.sin(rot)*outerR; ctx.lineTo(x,y); rot += step;
+      x = cx + Math.cos(rot)*innerR; y = cy + Math.sin(rot)*innerR; ctx.lineTo(x,y); rot += step;
+    }
+    ctx.lineTo(cx, cy-outerR);
+    ctx.closePath();
+  } else if(symbol === 'heart'){
+    ctx.moveTo(cx, cy+r*0.75);
+    ctx.bezierCurveTo(cx - r*1.3, cy - r*0.4, cx - r*0.5, cy - r*1.3, cx, cy - r*0.5);
+    ctx.bezierCurveTo(cx + r*0.5, cy - r*1.3, cx + r*1.3, cy - r*0.4, cx, cy + r*0.75);
+    ctx.closePath();
+  } else {
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+  }
+  ctx.fill();
+  ctx.stroke();
+}
+async function buildActivityLayoutComposite(){
+  if(!activityLayout.photo) return '';
+  const bgImg = await loadImageAsync(activityLayout.photo);
+  const w = Math.min(bgImg.naturalWidth || bgImg.width, 1600);
+  const h = Math.round((bgImg.naturalHeight || bgImg.height) * (w / (bgImg.naturalWidth || bgImg.width)));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bgImg, 0, 0, w, h);
+  const baseR = Math.max(14, w*0.022);
+  (activityLayout.markers||[]).forEach(m => {
+    const cx = (m.x!=null?m.x:0.5)*w, cy = (m.y!=null?m.y:0.5)*h;
+    const mult = layoutMarkerSizeMult(m.size);
+    let rw = baseR*mult, rh = baseR*mult;
+    if(m.symbol === 'rect'){
+      const ratioW = Math.max(1, parseFloat(m.ratioW)||2), ratioH = Math.max(1, parseFloat(m.ratioH)||1);
+      if(ratioW >= ratioH){ rw = baseR*mult*(ratioW/ratioH); rh = baseR*mult; }
+      else { rw = baseR*mult; rh = baseR*mult*(ratioH/ratioW); }
+    }
+    drawLayoutMarkerShape_(ctx, m.symbol, cx, cy, rw, rh, m.color||'#E4002B');
+    if(m.label){
+      ctx.fillStyle = '#fff';
+      ctx.font = signFontOf(Math.max(11, Math.min(rw,rh)*0.85), 700);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(m.label, cx, cy + (m.symbol==='triangle' ? rh*0.25 : 0));
+    }
+  });
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
+// ---------- PR plan template ----------
+function renderPrPlan(){
+  // นับตามไซส์ป้ายจริงของแต่ละ "ป้าย" (unit) ไม่ใช่ระดับจุด เพราะจุดเดียวกันมีป้ายคนละไซส์ได้แล้ว
+  const counts = {};
+  signages.forEach(s => {
+    (s.units && s.units.length ? s.units : [makeEmptyUnit()]).forEach(u => {
+      const key = u.typeKey || 'guerrilla';
+      counts[key] = (counts[key]||0) + 1;
+    });
+  });
+  const bannerCount = counts['banner']||0;
+  const guerrillaCount = (counts['guerrilla']||0) + (counts['square']||0);
+  const total = bannerCount + guerrillaCount;
+  const box = document.getElementById('prPlanPreview');
+  box.innerHTML = `
+    <b>แผนประชาสัมพันธ์ :</b><br>
+    1. เปิดคลิปเสียง และโฟนประชาสัมพันธ์เน้นย้ำวันเปิดสาขาและโปรโมชั่นหน้าสาขา<br>
+    2. ติดสื่อป้ายแบรนเนอร์ตามร้านค้าชุมชนในพื้นที่ จำนวน ${bannerCount} ผืน ป้ายกองโจร ${guerrillaCount} จุด รวมจำนวน ${total} ป้าย เพื่อประชาสัมพันธ์ในพื้นที่สังเขป<br>
+    3. ขับรถโฟนประชาสัมพันธ์ใช้เสียงในพื้นที่โดยรอบสาขาในพื้นที่สังเขป<br>
+    4. ประชาสัมพันธ์แจกใบปลิวโปรโมชั่นเปิดร้านในจุดรวมพล/สถานที่ราชการ/หน้าโรงงานต่างๆ (เน้นย้ำวันเปิดสาขาและทำเลสาขา พร้อมเชิญชวนสมัครสมาชิก)<br>
+    5. ช่วงเย็นของ D-1 โฟนประชาสัมพันธ์ด้านหน้าสาขาอีกครั้งเพื่อเน้นย้ำกิจกรรม
+    <span class="auto-badge">auto จาก Step 6</span>
+  `;
+}
+
+function renderSignageSummary(){
+  // นับตามไซส์ป้ายของแต่ละป้าย (unit) เอง เพราะจุดเดียวกันมีป้ายคนละไซส์ได้แล้ว
+  const counts = {};
+  signages.forEach(s => {
+    const units = (s.units && s.units.length) ? s.units : [makeEmptyUnit()];
+    units.forEach(u => {
+      const tk = u.typeKey || 'guerrilla';
+      const baseLabel = (SIGNAGE_TYPES.find(t=>t.key===tk) || SIGNAGE_TYPES[0]).label;
+      // ป้ายกองโจร แยกนับตามวิธีติดตั้ง — ปักเสาไฟ vs. โครงค้ำ
+      const label = (tk === 'guerrilla' && u.frame) ? baseLabel + ' (โครงค้ำ)' : baseLabel;
+      counts[label] = (counts[label]||0) + 1;
+    });
+  });
+  let total = 0;
+  let rows = '';
+  let i=1;
+  for(const [label, qty] of Object.entries(counts)){
+    total += qty;
+    rows += `<tr><td>${i++}</td><td>${label}</td><td>${qty}</td><td></td><td></td></tr>`;
+  }
+  document.getElementById('signageSummaryTable').innerHTML = `
+    <table>
+      <tr><th style="width:40px;">ลำดับ</th><th>รายการป้าย</th><th style="width:60px;">จำนวน</th><th style="width:90px;">ราคา/ป้าย</th><th style="width:90px;">ราคารวม</th></tr>
+      ${rows || '<tr><td colspan="5" style="color:var(--muted);">ยังไม่มีจุดติดป้าย — เพิ่มใน Step 6</td></tr>'}
+      <tr><td colspan="2" style="font-weight:700;">รวม</td><td style="font-weight:700;">${total}</td><td></td><td></td></tr>
+    </table>
+  `;
+}
+
+// ---------- Generate final document ----------
+function generateFinal(){
+  const branchName = document.getElementById('branchName').value || '(ไม่ระบุชื่อสาขา)';
+  const branchCode = document.getElementById('branchCode').value || '-';
+  const province = document.getElementById('province').value || '-';
+  const address = document.getElementById('address').value || '-';
+  const coords = document.getElementById('coords').value || '-';
+  const mapLink = document.getElementById('mapLink').value || '-';
+  const responsible = document.getElementById('responsible').value || '-';
+  const activityTeam = document.getElementById('activityTeam').value || '-';
+  const storeHours = document.getElementById('storeHours').value || '-';
+  const start = document.getElementById('openStart').value;
+  const end = document.getElementById('openEnd').value;
+  const install = start ? fmtDate(addDays(start,-7)) : '-';
+  const removal = start ? fmtDate(addDays(start,5)) : '-';
+  const artworkDeadline = document.getElementById('artworkDeadline').value;
+  const purchasingContact = document.getElementById('purchasingContact').value || '-';
+  const otherSuppliers = document.getElementById('otherSuppliers').value || '-';
+  const activityDetail = document.getElementById('activityDetail').value || '(ไม่มีข้อมูล)';
+
+  let out = '';
+  out += `========================================\n`;
+  out += `PACK GO — ${branchName}\n`;
+  out += `========================================\n\n`;
+  out += `รหัสสาขา: ${branchCode}\n`;
+  out += `จังหวัด: ${province}\n`;
+  out += `ที่อยู่: ${address}\n`;
+  out += `พิกัด: ${coords}\n`;
+  out += `Google Maps: ${mapLink}\n`;
+  out += `ผู้รับผิดชอบ: ${responsible}\n`;
+  out += `ทีมกิจกรรม: ${activityTeam}\n`;
+  out += `เวลาเปิด-ปิดร้าน: ${storeHours}\n`;
+  out += `วันเปิดสาขา: ${start?fmtDate(start):'-'} ถึง ${end?fmtDate(end):'-'}\n`;
+  out += `วันติดตั้งป้าย: ${install} (D-7)\n`;
+  out += `วันรื้อถอนป้าย: ${removal} (Day 6)\n\n`;
+
+  out += `--- 1. แผนงานประชาสัมพันธ์ ---\n`;
+  out += document.getElementById('prPlanPreview').innerText + '\n\n';
+
+  out += `--- 2. ตารางแผนงานรายวัน ---\n`;
+  dayPlans.forEach(day => {
+    out += `\n${day.label}:\n`;
+    day.rows.forEach(r => {
+      if(r.timeStart || r.timeEnd || r.detail) out += `  ${rowTimeDisplay(r)} | ${r.detail} | กำลังคน ${r.manpower} | ใบปลิว ${rowFlyersDisplay(r)}${(r.lat && r.lng) ? ' | พิกัด ' + r.lat + ', ' + r.lng : ''}\n`;
+    });
+  });
+  out += '\n';
+
+  out += `--- 3. จุดติดป้าย ---\n`;
+  if(signages.length===0) out += '(ยังไม่มีข้อมูล)\n';
+  signages.forEach((s, idx) => {
+    const units = (s.units && s.units.length) ? s.units : [makeEmptyUnit()];
+    const unitsText = units.map((u,ui)=>{
+      const tLabel = (SIGNAGE_TYPES.find(t=>t.key===(u.typeKey||'guerrilla')) || SIGNAGE_TYPES[0]).label;
+      return `    ป้ายที่ ${ui+1} (${tLabel}): ${u.detail||'-'} | พิกัด: ${u.coords||'-'}${u.photo?' | 📎 มีรูปแล้ว':''}${u.frame?' | 🔧 ต้องทำโครงค้ำ':''}`;
+    }).join('\n');
+    out += `จุดที่ ${idx+1} (${units.length} ป้าย)\n${unitsText}\n`;
+    if(s.notes) out += `  หมายเหตุ: ${s.notes}\n`;
+  });
+  out += '\n';
+
+  out += `--- 4. โรงแรม/ที่พัก ---\n`;
+  if(hotels.length===0) out += '(ไม่มี)\n';
+  hotels.forEach((h, i) => {
+    out += `${i+1}. ${h.name || '(ไม่ระบุชื่อ)'}${h.phone ? ' | โทร ' + h.phone : ''}\n`;
+    if(h.pricePerNight || h.capacity) out += `   ราคา: ${h.pricePerNight||'-'}${h.capacity ? ' (' + h.capacity + ')' : ''}\n`;
+    if(h.coords) out += `   พิกัด: ${h.coords}\n`;
+    if(h.notes) out += `   หมายเหตุ: ${h.notes}\n`;
+    if(h.photo) out += `   📎 มีรูปแล้ว\n`;
+  });
+  out += '\n';
+
+  out += `--- 5. ที่จอดรถสำหรับพนักงาน ---\n`;
+  if(parkings.length===0) out += '(ไม่มี)\n';
+  parkings.forEach((p, i) => {
+    out += `${i+1}. มอเตอร์ไซค์ ${p.motorcycleCount||'-'} คัน | รถยนต์ ${p.carCount||'-'} คัน\n`;
+    if(p.coords) out += `   พิกัด: ${p.coords}\n`;
+    if(p.notes) out += `   หมายเหตุ: ${p.notes}\n`;
+    if(p.photo) out += `   📎 มีรูปแล้ว\n`;
+  });
+  out += '\n';
+
+  out += `--- 6. กิจกรรมหน้าร้าน ---\n${activityDetail}\n`;
+  if(activityLayout.photo){
+    out += `📎 มีรูป Layout แล้ว (${activityLayout.markers.length} จุด)\n`;
+    activityLayout.markers.forEach(m => {
+      out += `  ${layoutSymbolGlyph(m.symbol)} ${m.label||'-'}: ${m.desc||'-'}\n`;
+    });
+  }
+  out += '\n';
+
+  out += `--- 7. ขอความช่วยเหลือ ---\n`;
+  helpItems.forEach(h => out += `- ${h.name}: ${h.qty}\n`);
+  out += '\n';
+
+  out += `--- 8. สรุปสำหรับ MKT + จัดซื้อ ---\n`;
+  out += document.getElementById('signageSummaryTable').innerText + '\n';
+  out += `Artwork ต้องเสร็จภายใน: ${artworkDeadline?fmtDate(artworkDeadline):'(ยังไม่ระบุ)'}\n`;
+  out += `ซัพป้ายที่แนะนำ: ${purchasingContact}\n`;
+  out += `ซัพอื่นๆที่แนะนำ (เช่น ซัพไฟ ซัพเต็นท์): ${otherSuppliers}\n`;
+
+  document.getElementById('finalBranchName').textContent = branchName;
+  document.getElementById('finalText').textContent = out;
+  document.getElementById('finalSection').classList.remove('hidden');
+  document.getElementById('finalSection').scrollIntoView({behavior:'smooth'});
+}
+function copyFinal(){
+  navigator.clipboard.writeText(document.getElementById('finalText').textContent).then(()=>{
+    const btn = document.querySelector('#finalSection button:last-child');
+    const old = btn.textContent;
+    btn.textContent = '✅ คัดลอกแล้ว';
+    setTimeout(()=>{btn.textContent = old;}, 1500);
+  });
+}
+
+function toggleImportBox(){
+  document.getElementById('importBox').classList.toggle('hidden');
+}
+function importJSON(){
+  const raw = document.getElementById('importText').value.trim();
+  if(!raw){ alert('กรุณาวาง JSON ก่อน'); return; }
+  try{
+    const data = JSON.parse(raw);
+    applyState(data);
+    document.getElementById('importBox').classList.add('hidden');
+    document.getElementById('importText').value = '';
+    alert('โหลดข้อมูลกลับมาแล้ว');
+  }catch(e){
+    alert('อ่าน JSON ไม่ได้: ' + e.message);
+  }
+}
+async function openPackGoSlides(){
+  const btn = document.getElementById('pptxBtn');
+  const originalLabel = btn.textContent;
+  // Open the tab synchronously (inside the click handler) so browsers don't
+  // treat it as a blocked popup — we navigate it to the real URL once ready.
+  const newTab = window.open('', '_blank');
+  if(newTab) newTab.document.write('<p style="font-family:sans-serif;padding:24px;">กำลังสร้างสไลด์ Pack GO... รอสักครู่</p>');
+  try{
+    btn.disabled = true;
+    btn.textContent = '⏳ กำลังสร้างสไลด์ (รอสักครู่ ~10-20 วิ)...';
+    const state = collectState();
+    state.installDate = state.openStart ? addDays(state.openStart,-7) : null;
+    state.removalDate = state.openStart ? addDays(state.openStart,5) : null;
+    // จุดที่มีหลายป้ายและแชร์รูปสถานที่จริงรูปเดียวกัน -> รวมเป็น "1 รูป 1 สไลด์" ตอนสร้าง PPTX
+    state.signages = await Promise.all((state.signages||[]).map(async (s) => {
+      const clone = Object.assign({}, s);
+      clone.comboGroups = await buildComboGroupsForSignage(s);
+      return clone;
+    }));
+    // ผัง Layout กิจกรรม (ถ้ามี) -> compose รูป + จุดสัญลักษณ์เป็นภาพเดียว ส่งไปรวมกับสไลด์กิจกรรม
+    state.activityLayout = activityLayout.photo ? {
+      markers: activityLayout.markers,
+      slideLayout: activityLayout.slideLayout,
+      compositedPhoto: await buildActivityLayoutComposite()
+    } : null;
+    const jsonStr = JSON.stringify(state);
+    const result = await gsRun('createPackGoSlides', jsonStr);
+    if(newTab) newTab.location = result.url;
+    else window.open(result.url, '_blank');
+  }catch(e){
+    if(newTab) newTab.close();
+    alert('สร้างสไลด์ไม่สำเร็จ: ' + e.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+function exportJSON(){
+  const state = collectState();
+  state.installDate = state.openStart ? addDays(state.openStart,-7) : null;
+  state.removalDate = state.openStart ? addDays(state.openStart,5) : null;
+  document.getElementById('jsonText').textContent = JSON.stringify(state, null, 2);
+  document.getElementById('jsonSection').classList.remove('hidden');
+  document.getElementById('jsonSection').scrollIntoView({behavior:'smooth'});
+}
+function copyJSON(){
+  navigator.clipboard.writeText(document.getElementById('jsonText').textContent).then(()=>{
+    const btn = document.querySelector('#jsonSection button');
+    const old = btn.textContent;
+    btn.textContent = '✅ คัดลอกแล้ว';
+    setTimeout(()=>{btn.textContent = old;}, 1500);
+  });
+}
+
+// ---------- Save / Load ----------
+function collectState(){
+  return {
+    branchName: document.getElementById('branchName').value,
+    branchCode: document.getElementById('branchCode').value,
+    province: document.getElementById('province').value,
+    address: document.getElementById('address').value,
+    coords: document.getElementById('coords').value,
+    mapLink: document.getElementById('mapLink').value,
+    responsible: document.getElementById('responsible').value,
+    teamSMA: document.getElementById('teamSMA').value,
+    teamLeader: document.getElementById('teamLeader').value,
+    activityTeam: document.getElementById('activityTeam').value,
+    openTimeStore: document.getElementById('openTimeStore').value,
+    closeTimeStore: document.getElementById('closeTimeStore').value,
+    storeHours: document.getElementById('storeHours').value,
+    openStart: document.getElementById('openStart').value,
+    openEnd: document.getElementById('openEnd').value,
+    activityDetail: document.getElementById('activityDetail').value,
+    artworkDeadline: document.getElementById('artworkDeadline').value,
+    purchasingContact: document.getElementById('purchasingContact').value,
+    otherSuppliers: document.getElementById('otherSuppliers').value,
+    signages, helpItems, dayPlans, hotels, parkings, activityLayout
+  };
+}
+// Google Sheet cells cap out at 50,000 characters — photos (base64) can blow past that
+// easily, so drafts saved to the Sheet strip photo data out. Photos still travel through
+// fully when you use "Export JSON" (that's just clipboard text, no Sheet limit involved).
+const SHEET_CELL_SAFE_LIMIT = 45000; // leave some headroom below the real 50,000 cap
+function collectStateForDraft(){
+  const state = collectState();
+  const stripped = JSON.parse(JSON.stringify(state));
+  let photosStripped = false;
+  (stripped.signages || []).forEach(s => {
+    (s.units || []).forEach(u => {
+      delete u.officialArtImgObj; // transient runtime-only Image object, never persist
+      if(u.photo || u.locationPhoto || u.signPng || u.officialArtImg){
+        u.photo = ''; u.locationPhoto = ''; u.signPng = ''; u.officialArtImg = '';
+        photosStripped = true;
+      }
+    });
+  });
+  (stripped.hotels || []).forEach(h => {
+    if(h.photo){ h.photo = ''; photosStripped = true; }
+  });
+  (stripped.parkings || []).forEach(p => {
+    if(p.photo){ p.photo = ''; photosStripped = true; }
+  });
+  if(stripped.activityLayout && stripped.activityLayout.photo){
+    stripped.activityLayout.photo = '';
+    photosStripped = true;
+  }
+  let jsonStr = JSON.stringify(stripped);
+  if(jsonStr.length > SHEET_CELL_SAFE_LIMIT){
+    // still too large even without photos (e.g. huge amount of text) — trim helpfully rather than fail silently
+    stripped.activityDetail = (stripped.activityDetail||'').slice(0, 2000);
+    jsonStr = JSON.stringify(stripped);
+  }
+  return { jsonStr, photosStripped, tooLarge: jsonStr.length > SHEET_CELL_SAFE_LIMIT };
+}
+function applyState(s){
+  document.getElementById('branchName').value = s.branchName||'';
+  document.getElementById('branchCode').value = s.branchCode||'';
+  document.getElementById('province').value = s.province||'';
+  document.getElementById('address').value = s.address||'';
+  document.getElementById('coords').value = s.coords||'';
+  document.getElementById('mapLink').value = s.mapLink||'';
+  document.getElementById('responsible').value = s.responsible||'';
+  document.getElementById('teamSMA').value = s.teamSMA||'';
+  document.getElementById('teamLeader').value = s.teamLeader||'';
+  document.getElementById('activityTeam').value = s.activityTeam||'';
+  document.getElementById('openTimeStore').value = s.openTimeStore||'';
+  document.getElementById('closeTimeStore').value = s.closeTimeStore||'';
+  document.getElementById('storeHours').value = s.storeHours||'';
+  {
+    const _ot = (s.openTimeStore||'').split(':'), _ct = (s.closeTimeStore||'').split(':');
+    document.getElementById('openHH').value = _ot[0]||'';
+    document.getElementById('openMM').value = _ot[1]||'';
+    document.getElementById('closeHH').value = _ct[0]||'';
+    document.getElementById('closeMM').value = _ct[1]||'';
+  }
+  document.getElementById('openStart').value = s.openStart||'';
+  document.getElementById('openEnd').value = s.openEnd||'';
+  document.getElementById('activityDetail').value = s.activityDetail||'';
+  document.getElementById('artworkDeadline').value = s.artworkDeadline||'';
+  document.getElementById('purchasingContact').value = s.purchasingContact||'';
+  document.getElementById('otherSuppliers').value = s.otherSuppliers||'';
+  const TYPE_KEY_MIGRATION = { guerrilla_big: 'guerrilla', guerrilla_small: 'square', banner_31: 'banner', banner_305: 'banner', other: 'guerrilla' };
+  const DIRECTION_TO_ARROW = {
+    'ตรงไป': 'up', 'เลี้ยวซ้าย': 'left', 'เลี้ยวขวา': 'right',
+    'ตรงไปแล้วเลี้ยวซ้าย': 'up_left', 'ตรงไปแล้วเลี้ยวขวา': 'up_right',
+    'ถึงแล้ว (ซ้าย)': 'arrive_left', 'ถึงแล้ว (ขวา)': 'arrive_right',
+    'ยูเทิร์น': 'uturn',
+  };
+  signages.length=0;
+  (s.signages||[]).forEach(x=>{
+    // backward compatibility: old data had one photo per point (x.photo), not per unit.
+    if(x.photo && x.units && x.units[0] && !x.units[0].photo){
+      x.units[0].photo = x.photo;
+      x.units[0].locationPhoto = x.units[0].locationPhoto || x.photo;
+    }
+    delete x.photo;
+    // migrate old sign-type keys (guerrilla_big/guerrilla_small/banner_31/banner_305/other)
+    // to the new 3-type schema shared with the sign design engine
+    if(x.typeKey && TYPE_KEY_MIGRATION[x.typeKey]) x.typeKey = TYPE_KEY_MIGRATION[x.typeKey];
+    (x.units||[]).forEach(u => {
+      // เดิมเลือกขนาดป้ายได้แค่ระดับจุด (x.typeKey) ใช้ร่วมกันทุกป้ายในจุด — ตอนนี้เลือกแยกต่อป้ายได้
+      // (จุดเดียวกันมีป้ายคนละไซส์ได้) เลยต้องสืบทอดค่าเดิมของจุดลงมาที่แต่ละป้ายก่อน ถ้าป้ายนั้นยังไม่มีของตัวเอง
+      if(!u.typeKey) u.typeKey = x.typeKey || 'guerrilla';
+      // old marker-based fields (content/direction/markerX/Y/Scale) -> new sign-engine fields
+      if('content' in u || 'direction' in u){
+        u.variant = (u.content === 'โปรคาเฟ่') ? 'bao' : 'announce';
+        u.arrow = u.direction && DIRECTION_TO_ARROW[u.direction] ? DIRECTION_TO_ARROW[u.direction] : (u.direction ? 'none' : (u.arrow || 'right'));
+        if(u.arrow === 'none' && u.direction) u.landmark = u.landmark || u.direction; // free-typed custom direction -> use as landmark text
+        u.unit = (u.distanceUnit === 'เมตร') ? 'ม.' : (u.distanceUnit || u.unit || 'กม.');
+        delete u.content; delete u.direction; delete u.distanceUnit;
+        delete u.markerX; delete u.markerY; delete u.markerScale;
+        // the composited photo had the OLD marker baked in — it's stale now, drop it so
+        // the sign engine regenerates a real design once the branch is reopened
+        u.photo = '';
+        u.signPng = '';
+      }
+      if(u.sx == null) u.sx = 0.5;
+      if(u.sy == null) u.sy = 0.5;
+      if(u.sscale == null) u.sscale = 0.32;
+    });
+    signages.push(x);
+  });
+  helpItems.length=0; (s.helpItems||[]).forEach(x=>helpItems.push(x));
+  dayPlans = s.dayPlans || [];
+  hotels.length=0; (s.hotels||[]).forEach(x=>hotels.push(x));
+  parkings.length=0; (s.parkings||[]).forEach(x=>parkings.push(x));
+  activityLayout = Object.assign({photo:'', markers:[], slideLayout:'top'}, s.activityLayout||{});
+  renderSignages(); renderHelp(); renderDays(); renderHotels(); renderParkings(); renderActivitySection(); renderAll(); renderSignageSummary();
+}
+// ---------- Auto-save (fires automatically after any edit, no manual button needed) ----------
+let autosaveTimer = null;
+function scheduleAutosave(){
+  if(autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(saveSessionSilently, 1200);
+}
+// ---------- Login gate (personal password, per-person) ----------
+let currentUserName = '';
+function showGate(){ document.getElementById('loginGate').classList.remove('hidden'); }
+function hideGate(){ document.getElementById('loginGate').classList.add('hidden'); }
+async function attemptLogin(){
+  const nameEl = document.getElementById('gateName');
+  const passEl = document.getElementById('gatePassword');
+  const errEl = document.getElementById('gateErr');
+  const name = nameEl.value.trim();
+  const pass = passEl.value;
+  errEl.textContent = '';
+  if(!name || !pass){ errEl.textContent = 'กรุณากรอกชื่อและรหัสส่วนตัว'; return; }
+  try{
+    errEl.textContent = 'กำลังตรวจสอบ...';
+    const ok = await gsRun('checkLogin', name, pass);
+    if(ok){
+      currentUserName = name;
+      try{ sessionStorage.setItem('pgbUserName', name); }catch(e){}
+      passEl.value = '';
+      errEl.textContent = '';
+      hideGate();
+    }else{
+      errEl.textContent = 'ชื่อหรือรหัสไม่ถูกต้อง กรุณาลองใหม่';
+    }
+  }catch(e){
+    errEl.textContent = 'ตรวจสอบไม่สำเร็จ: ' + e.message;
+  }
+}
+function initLoginGate(){
+  document.getElementById('gateLogo').src = SIGN_DEFAULT_LOGO.src;
+  let saved = '';
+  try{ saved = sessionStorage.getItem('pgbUserName') || ''; }catch(e){}
+  if(saved){
+    currentUserName = saved;
+    hideGate();
+  }else{
+    showGate();
+    document.getElementById('gateName').focus();
+  }
+  document.getElementById('gatePassword').addEventListener('keydown', (ev) => { if(ev.key === 'Enter') attemptLogin(); });
+  document.getElementById('gateName').addEventListener('keydown', (ev) => { if(ev.key === 'Enter') document.getElementById('gatePassword').focus(); });
+}
+
+// ทางเลี่ยงบั๊กของ google.script.run: ยิง HTTP ตรงไปที่ตัว web app เอง (ผ่าน doPost)
+// แทนที่จะพึ่ง iframe sandbox ของ Google ที่พังอยู่ตอนนี้
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwxYQXQ0zXpQw3lGAlsyRQzettakMZR1D0c6-yEMlZV2PafgTesZSwTIbDgOnyPaz29/exec";
+function gsRun(funcName, ...args){
+  return fetch(WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // เลี่ยง CORS preflight
+    body: JSON.stringify({ fn: funcName, args })
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (!data || !data.ok) throw new Error((data && data.error) || 'เรียกใช้งานไม่สำเร็จ');
+      return data.result;
+    });
+}
+
+async function saveSessionSilently(){
+  const name = document.getElementById('branchName').value || document.getElementById('branchCode').value;
+  if(!name) return;
+  const indicator = document.getElementById('autosaveIndicator');
+  if(!signageCountDropGuard()){
+    if(indicator){ indicator.textContent = '⏸ ยกเลิกบันทึกอัตโนมัติรอบนี้ (กันจุดติดป้ายหาย) — กด "โหลด" สาขานี้ก่อนแก้ไขต่อ'; indicator.style.opacity = '1'; }
+    return;
+  }
+  try{
+    if(indicator){ indicator.textContent = 'กำลังบันทึก...'; indicator.style.opacity = '1'; }
+    const { jsonStr } = collectStateForDraft();
+    await gsRun('saveDraft', name, jsonStr, currentUserName);
+    currentLoadedBranchKey = name;
+    await refreshSavedList();
+    if(indicator){
+      indicator.textContent = '✓ บันทึกอัตโนมัติแล้ว ' + new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      clearTimeout(window._autosaveFadeTimer);
+      window._autosaveFadeTimer = setTimeout(() => { indicator.style.opacity = '0.45'; }, 2500);
+    }
+  }catch(e){
+    if(indicator){ indicator.textContent = '⚠️ บันทึกอัตโนมัติไม่สำเร็จ: ' + e.message; indicator.style.opacity = '1'; }
+    console.error('autosave failed', e);
+  }
+}
+
+const PHOTO_CHUNK_SIZE = 35000;
+function currentBranchKey(){
+  return document.getElementById('branchName').value || document.getElementById('branchCode').value || '';
+}
+// บันทึกรูปแบบแบ่งเป็นชิ้นๆ ไป Google Sheet — เดิมถ้าเน็ตสะดุดกลาง loop (พบบ่อยตอนอยู่หน้างานจริง
+// สัญญาณอ่อน) การบันทึกจะหยุดครึ่งๆ กลางๆ แบบเงียบๆ ไม่มีใครรู้ตัว พอโหลดกลับมาดูทีหลัง (คนละเครื่อง/
+// คนละวัน) รูปจะกลายเป็นไฟล์เสีย/เปิดไม่ขึ้น — ตอนนี้เลยเพิ่ม retry ทีละชิ้น + เช็คย้อนกลับหลังบันทึกเสร็จ
+// ว่าข้อมูลที่อยู่บนเซิร์ฟเวอร์ตรงกับที่ส่งไปจริงๆ ถ้าไม่ตรง/ไม่ครบ จะโยน error ออกมาให้ผู้เรียกไปแจ้งเตือนต่อ
+// แทนที่จะปล่อยผ่านแบบเงียบๆ เหมือนเดิม
+async function savePhotoToSheet(ownerId, dataUrl){
+  const branchKey = currentBranchKey();
+  if(!branchKey) return;
+  const key = branchKey + '::' + ownerId;
+  await gsRun('deletePhotoChunks', key);
+  if(!dataUrl) return;
+  for(let i = 0, idx = 0; i < dataUrl.length; i += PHOTO_CHUNK_SIZE, idx++){
+    const chunk = dataUrl.slice(i, i + PHOTO_CHUNK_SIZE);
+    let ok = false, lastErr = null;
+    for(let attempt = 0; attempt < 3 && !ok; attempt++){
+      try{ await gsRun('savePhotoChunk', key, idx, chunk); ok = true; }
+      catch(e){ lastErr = e; }
+    }
+    if(!ok) throw new Error('บันทึกรูปไม่สำเร็จ ณ ส่วนที่ ' + (idx+1) + ' (เน็ตอาจไม่เสถียร): ' + (lastErr && lastErr.message));
+  }
+  // เช็คย้อนกลับว่าที่บันทึกไปครบจริงตามที่ส่ง — กันไฟล์เสีย/ไม่ครบแบบเงียบๆ ที่ตรวจไม่พบจนกว่าจะโหลดกลับมาดูทีหลัง
+  // ลองเช็คซ้ำสั้นๆ ก่อนสรุปว่าพัง เผื่อฝั่ง Google Sheets อัปเดต/อ่านกลับไม่ทันจริงๆ ในเสี้ยววินาทีแรก
+  // (พบเคสที่ขึ้นเตือนว่าไม่สำเร็จ ทั้งที่จริงๆ บันทึกครบแล้ว — พอลองสร้างสไลด์ใหม่กลับเจอรูปปกติ)
+  const VERIFY_RETRY_DELAYS_MS = [0, 1000, 2000, 3000];
+  for(let v = 0; v < VERIFY_RETRY_DELAYS_MS.length; v++){
+    if(VERIFY_RETRY_DELAYS_MS[v]) await new Promise(r => setTimeout(r, VERIFY_RETRY_DELAYS_MS[v]));
+    const verify = await gsRun('loadPhotoChunks', key);
+    if(verify === dataUrl) return;
+  }
+  throw new Error('บันทึกรูปไปเซิร์ฟเวอร์ไม่ครบ (ข้อมูลที่เช็คย้อนกลับไม่ตรงกับที่ส่งไป)');
+}
+async function restorePhotosForBranch(branchKey){
+  if(!branchKey) return;
+  for(const s of signages){
+    for(let uIdx = 0; uIdx < (s.units||[]).length; uIdx++){
+      const u = s.units[uIdx];
+      try{
+        const artKey = branchKey + '::' + s.id + '::' + uIdx + '::art';
+        const artDataUrl = await gsRun('loadPhotoChunks', artKey);
+        if(artDataUrl) u.officialArtImg = artDataUrl;
+      }catch(e){ /* no official artwork saved for this unit — fine */ }
+      let gotLocationPhoto = false;
+      try{
+        const locKey = branchKey + '::' + s.id + '::' + uIdx + '::loc';
+        const locDataUrl = await gsRun('loadPhotoChunks', locKey);
+        if(locDataUrl){ u.locationPhoto = locDataUrl; gotLocationPhoto = true; }
+      }catch(e){ /* no location photo saved for this unit — fine (old data from before this fix) */ }
+      if(gotLocationPhoto){
+        // มีรูปสถานที่จริงกู้คืนมา -> สร้างป้าย+รูปรวมใหม่จากรูปนี้ + ตำแหน่ง/ข้อมูลป้ายที่มีอยู่แล้ว
+        // (แทนที่จะพึ่งรูปรวมที่เคยบันทึกไว้เฉยๆ) จะได้กลับมาลากปรับตำแหน่งป้ายต่อได้เลย ไม่ต้องลบรูปแล้วแนบใหม่
+        try{ await recompositeUnit(s.id, uIdx); }catch(e){ /* recomposite failed — fall through to stored photo below */ }
+      }
+      if(!u.photo){
+        // รูปสถานที่จริงกู้ไม่ได้ (เช่น บันทึกไว้ตั้งแต่ก่อนอัปเดตนี้) หรือ recomposite ข้างบนพลาด
+        // -> อย่างน้อยกู้รูปรวมเดิมมาโชว์ไว้ก่อน (ดูได้ แต่ปรับตำแหน่งป้ายต่อไม่ได้จนกว่าจะแนบรูปใหม่)
+        try{
+          const key = branchKey + '::' + s.id + '::' + uIdx;
+          const dataUrl = await gsRun('loadPhotoChunks', key);
+          if(dataUrl) u.photo = dataUrl;
+        }catch(e){ /* no photo saved for this unit — fine */ }
+      }
+    }
+  }
+  for(const h of hotels){
+    try{
+      const key = branchKey + '::hotel::' + h.id;
+      const dataUrl = await gsRun('loadPhotoChunks', key);
+      if(dataUrl) h.photo = dataUrl;
+    }catch(e){ /* no photo saved for this hotel — fine */ }
+  }
+  for(const p of parkings){
+    try{
+      const key = branchKey + '::parking::' + p.id;
+      const dataUrl = await gsRun('loadPhotoChunks', key);
+      if(dataUrl) p.photo = dataUrl;
+    }catch(e){ /* no photo saved for this parking spot — fine */ }
+  }
+  try{
+    const key = branchKey + '::activityLayout';
+    const dataUrl = await gsRun('loadPhotoChunks', key);
+    if(dataUrl) activityLayout.photo = dataUrl;
+  }catch(e){ /* no layout photo saved — fine */ }
+  renderSignages();
+  renderHotels();
+  renderParkings();
+  renderActivitySection();
+}
+
+// ---------- กันข้อมูลจุดติดป้ายหายจาก autosave ทับ (ดูคอมเมนต์ตรงประกาศตัวแปรด้านบน) ----------
+// เรียกตอนพิมพ์/เลือกชื่อสาขา (blur ของ branchName/branchCode หรือหลัง pickBranch) —
+// ถ้าชื่อนี้ตรงกับสาขาที่มีข้อมูลบันทึกไว้แล้ว แต่ session นี้ยังไม่เคยโหลดสาขานั้นมาก่อนเลย
+// (เช่น เปิดหน้าเว็บใหม่มาแล้วพิมพ์ชื่อสาขาที่มีอยู่แล้วทับ) จะถามก่อนว่าจะโหลดของเดิมมาต่อมั้ย
+function checkExistingDraftWarning(){
+  const key = currentBranchKey();
+  if(!key) return;
+  if(key === currentLoadedBranchKey) return; // เป็นสาขาที่โหลดมาอยู่แล้ว ไม่ต้องเตือน
+  if(key === dismissedDuplicateWarningFor) return; // เพิ่งถามไปแล้วรอบนี้ ผู้ใช้เลือกจะเริ่มใหม่เอง ไม่ถามซ้ำ
+  if(!SAVED_DRAFT_NAMES.includes(key)) return; // ไม่ใช่ชื่อสาขาที่มีข้อมูลอยู่แล้ว ไม่เกี่ยว
+  const wantsLoad = confirm(
+    `⚠️ สาขา "${key}" มีข้อมูลบันทึกไว้แล้วในระบบ\n\n` +
+    `กด "ตกลง" เพื่อโหลดข้อมูลเดิมมาต่อ (แนะนำ — กันจุดติดป้าย/ข้อมูลเดิมหาย)\n` +
+    `กด "ยกเลิก" ถ้าตั้งใจจะเริ่มกรอกใหม่ทับของเดิมจริงๆ`
+  );
+  if(wantsLoad){
+    loadSession(key);
+  }else{
+    dismissedDuplicateWarningFor = key;
+  }
+}
+// เรียกก่อนจะเซฟทุกครั้ง (ทั้ง autosave และกดเซฟเอง) — ถ้าจุดติดป้ายที่กำลังจะเซฟกลายเป็นศูนย์
+// ทั้งที่ตอนโหลด/เซฟล่าสุดยังมีอยู่ ให้เบรกแล้วถามยืนยันก่อน กันเผลอเซฟทับข้อมูลหายแบบเงียบๆ
+// คืนค่า true ถ้าเซฟต่อได้ปกติ, false ถ้าควรหยุดเซฟรอบนี้ไว้ก่อน
+function signageCountDropGuard(){
+  const current = signages.length;
+  if(lastKnownSignageCount != null && lastKnownSignageCount > 0 && current === 0){
+    const proceed = confirm(
+      `⚠️ กำลังจะบันทึกจุดติดป้ายของสาขานี้เป็น "ว่างเปล่า" (จากเดิมมี ${lastKnownSignageCount} จุด)\n\n` +
+      `ปกติแล้วนี่มักเกิดจากการพิมพ์ทับชื่อสาขาเดิมโดยยังไม่ได้กด "โหลด" ข้อมูลเดิมมาก่อน\n\n` +
+      `กด "ตกลง" ถ้าตั้งใจจะลบจุดติดป้ายทั้งหมดจริงๆ\n` +
+      `กด "ยกเลิก" เพื่อหยุดการบันทึกครั้งนี้ไว้ก่อน (ข้อมูลเดิมในระบบจะยังไม่ถูกทับ)`
+    );
+    if(!proceed) return false;
+  }
+  lastKnownSignageCount = current;
+  return true;
+}
+async function saveSession(){
+  const name = document.getElementById('branchName').value || document.getElementById('branchCode').value;
+  if(!name){ alert('กรุณากรอกชื่อสาขาหรือรหัสสาขาก่อนบันทึก'); return; }
+  if(!signageCountDropGuard()) return;
+  try{
+    const { jsonStr } = collectStateForDraft();
+    await gsRun('saveDraft', name, jsonStr, currentUserName);
+    currentLoadedBranchKey = name;
+    await refreshSavedList();
+    generateFinal();
+  }catch(e){ alert('บันทึกไม่สำเร็จ: ' + e.message); }
+}
+async function loadSession(name){
+  try{
+    const jsonStr = await gsRun('loadDraft', name);
+    if(!jsonStr) return;
+    applyState(JSON.parse(jsonStr));
+    currentLoadedBranchKey = name;
+    dismissedDuplicateWarningFor = '';
+    lastKnownSignageCount = signages.length;
+    await restorePhotosForBranch(name);
+  }catch(e){ alert('โหลดไม่สำเร็จ: ' + e.message); }
+}
+async function refreshSavedList(){
+  const row = document.getElementById('savedRow');
+  try{
+    const names = await gsRun('listDrafts');
+    SAVED_DRAFT_NAMES = names || [];
+    if(!names || names.length===0){ row.innerHTML=''; return; }
+    let html = '<div class="hint" style="margin-bottom:8px;">สาขาที่บันทึกไว้ (ทั้งทีมเห็นร่วมกัน):</div><div class="saved-list">';
+    names.forEach(name => {
+      html += `<div class="saved-chip" onclick="loadSession('${name.replace(/'/g,"\\'")}')">${name}</div>`;
+    });
+    html += '</div>';
+    row.innerHTML = html;
+  }catch(e){ row.innerHTML = '<div class="hint" style="color:var(--red)">โหลดรายชื่อสาขาไม่สำเร็จ: '+e.message+'</div>'; }
+}
+function clearAll(){
+  if(!confirm('ล้างข้อมูลทั้งหมดในหน้านี้?')) return;
+  applyState({});
+  currentLoadedBranchKey = '';
+  dismissedDuplicateWarningFor = '';
+  lastKnownSignageCount = null;
+  document.getElementById('finalSection').classList.add('hidden');
+}
+
+function populateSMAOptions(){
+  const sel = document.getElementById('teamSMA');
+  let html = '<option value="">- ทีม -</option>';
+  for(let i=1;i<=24;i++) html += `<option value="SMA${i}">SMA${i}</option>`;
+  sel.innerHTML = html;
+}
+function syncActivityTeam(){
+  const sma = document.getElementById('teamSMA').value;
+  const leader = document.getElementById('teamLeader').value.trim();
+  document.getElementById('activityTeam').value = sma && leader ? `${sma} (หัวหน้าทีม: ${leader})` : (sma || leader || '');
+  scheduleAutosave();
+}
+function populateStoreHourSelects(){
+  document.getElementById('openHH').innerHTML = timeHourOptions('');
+  document.getElementById('closeHH').innerHTML = timeHourOptions('');
+  document.getElementById('openMM').innerHTML = timeMinuteOptions('');
+  document.getElementById('closeMM').innerHTML = timeMinuteOptions('');
+}
+function syncStoreHours(){
+  const oh = document.getElementById('openHH').value, om = document.getElementById('openMM').value;
+  const ch = document.getElementById('closeHH').value, cm = document.getElementById('closeMM').value;
+  const open = (oh && om) ? oh+':'+om : '';
+  const close = (ch && cm) ? ch+':'+cm : '';
+  document.getElementById('openTimeStore').value = open;
+  document.getElementById('closeTimeStore').value = close;
+  const openLabel = oh ? thaiHourLabel(parseInt(oh,10)) + (om && om!=='00' ? ':'+om : '') : '';
+  const closeLabel = ch ? thaiHourLabel(parseInt(ch,10)) + (cm && cm!=='00' ? ':'+cm : '') : '';
+  document.getElementById('storeHours').value = (open && close) ? `${openLabel} - ${closeLabel}` : '';
+  scheduleAutosave();
+}
+
+async function loadBranchMaster(){
+  try{
+    const data = await gsRun('getBranchMasterData');
+    BRANCH_MASTER = data || [];
+  }catch(e){
+    console.error('โหลดรายชื่อสาขาไม่สำเร็จ:', e.message);
+  }
+}
+
+// init
+document.getElementById('headerLogo').src = SIGN_DEFAULT_LOGO.src;
+initLoginGate();
+loadBranchMaster();
+populateSMAOptions();
+populateStoreHourSelects();
+DEFAULT_HELP.forEach(([n,q]) => addHelpItem(n,q));
+rebuildDays();
+renderHotels();
+renderParkings();
+renderActivitySection();
+renderAll();
+renderSignageSummary();
+refreshSavedList();
+</script>
+</body>
+</html>
