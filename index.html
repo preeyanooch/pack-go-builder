@@ -3249,13 +3249,40 @@ async function refreshSavedList(){
     const names = await gsRun('listDrafts');
     SAVED_DRAFT_NAMES = names || [];
     if(!names || names.length===0){ row.innerHTML=''; return; }
-    let html = '<div class="hint" style="margin-bottom:8px;">สาขาที่บันทึกไว้ (ทั้งทีมเห็นร่วมกัน):</div><div class="saved-list">';
+    let html = '<div class="hint" style="margin-bottom:8px;">สาขาที่บันทึกไว้ (ทั้งทีมเห็นร่วมกัน) — กด × เพื่อลบสาขาที่ทำเสร็จแล้ว:</div><div class="saved-list">';
     names.forEach(name => {
-      html += `<div class="saved-chip" onclick="loadSession('${name.replace(/'/g,"\\'")}')">${name}</div>`;
+      const esc = name.replace(/'/g,"\\'");
+      html += `<div class="saved-chip" style="display:inline-flex; align-items:center; gap:6px;">`
+        + `<span onclick="loadSession('${esc}')" style="cursor:pointer;">${name}</span>`
+        + `<span onclick="event.stopPropagation(); deleteBranchUI('${esc}')" title="ลบสาขานี้" `
+        + `style="cursor:pointer; color:var(--red); font-weight:bold; padding:0 4px;">×</span>`
+        + `</div>`;
     });
     html += '</div>';
     row.innerHTML = html;
   }catch(e){ row.innerHTML = '<div class="hint" style="color:var(--red)">โหลดรายชื่อสาขาไม่สำเร็จ: '+e.message+'</div>'; }
+}
+// ลบสาขาที่ "ทำเสร็จแล้ว" ออกจากฐานข้อมูลถาวร (draft + รูปทุกรูปของสาขานั้น) — ยิ่งข้อมูลสะสมเยอะ
+// backend ยิ่งช้าลงเรื่อยๆ เพราะทุกครั้งที่บันทึก/โหลด/ดูรายชื่อ ระบบอ่าน "ทั้งชีต" มาสแกนเสมอ
+// (ดูคอมเมนต์ที่ deleteBranchCompletely ฝั่ง Apps Script) ลบเป็นระยะๆ จึงช่วยให้ระบบเร็วขึ้นในระยะยาว
+// ต้องอัปเดต Code.gs ฝั่ง Apps Script ก่อน ไม่งั้นจะขึ้น error "ไม่รู้จักคำสั่ง: deleteBranchCompletely"
+async function deleteBranchUI(name){
+  if(restoringSessionCount > 0){ alert('กำลังโหลดข้อมูลอยู่ กรุณารอสักครู่ก่อนลบ'); return; }
+  const sure = confirm(`⚠️ ลบสาขา "${name}" ถาวร?\n\nจะลบทั้งข้อมูลฟอร์มและรูปภาพทั้งหมดของสาขานี้ออกจากระบบ กู้คืนไม่ได้\n\nใช้เมื่อสาขานี้ "ทำเสร็จแล้ว" จริงๆ เท่านั้น`);
+  if(!sure) return;
+  try{
+    const result = await gsRun('deleteBranchCompletely', name);
+    if(currentLoadedBranchKey === name){
+      applyState({});
+      currentLoadedBranchKey = '';
+      lastKnownSignageCount = null;
+      document.getElementById('finalSection').classList.add('hidden');
+    }
+    await refreshSavedList();
+    alert(`✅ ลบสาขา "${name}" แล้ว (รูปภาพที่ลบไปด้วย: ${result && result.deletedPhotoRows || 0} ชิ้น)`);
+  }catch(e){
+    alert('ลบไม่สำเร็จ: ' + e.message);
+  }
 }
 function clearAll(){
   if(!confirm('ล้างข้อมูลทั้งหมดในหน้านี้?')) return;
