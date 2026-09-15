@@ -3109,22 +3109,29 @@ async function savePhotoToSheet(ownerId, dataUrl){
   }
   throw new Error('บันทึกรูปไปเซิร์ฟเวอร์ไม่ครบ (ข้อมูลที่เช็คย้อนกลับไม่ตรงกับที่ส่งไป)');
 }
+// loadPhotoChunks บนเซิร์ฟเวอร์คืนค่า '' เฉยๆ ถ้า "ไม่เคยมีรูปนี้จริงๆ" (ไม่ throw) — ดังนั้นถ้า
+// gsRun ตรงนี้ throw จริงๆ แปลว่าเช็คไม่สำเร็จ (เน็ต/Apps Script มีปัญหา) ไม่ใช่ "ไม่มีรูป, ไม่เป็นไร"
+// เดิมโค้ดตรงนี้ปนสองเคสนี้เป็นอันเดียวกัน (catch แล้วเงียบ) ทำให้ถ้าโหลดไม่สำเร็จชั่วคราว หน้าเว็บ
+// จะโชว์ว่า "ไม่มีรูป" ทั้งที่จริงๆ มีอยู่บนเซิร์ฟเวอร์ — ถ้าผู้ใช้เข้าใจผิดแล้วแนบรูปใหม่ทับช่องนั้น
+// savePhotoToSheet จะลบรูปเดิมทิ้งจริงถาวรก่อนเขียนรูปใหม่ (ดูคอมเมนต์ที่นั่น) เท่ากับรูปเดิมหายจริง
+// ทางแก้: แยกสองเคสนี้ออกจากกัน แล้วเตือนผู้ใช้ชัดๆ ถ้าเช็คไม่สำเร็จ กันเผลอแนบรูปทับของจริง
 async function restorePhotosForBranch(branchKey){
   if(!branchKey) return;
-  for(const s of signages){
+  const loadFailures = [];
+  async function tryLoadPhoto_(key, label){
+    try{ return await gsRun('loadPhotoChunks', key); }
+    catch(e){ loadFailures.push(label); return null; }
+  }
+  for(let sIdx = 0; sIdx < signages.length; sIdx++){
+    const s = signages[sIdx];
     for(let uIdx = 0; uIdx < (s.units||[]).length; uIdx++){
       const u = s.units[uIdx];
-      try{
-        const artKey = branchKey + '::' + s.id + '::' + uIdx + '::art';
-        const artDataUrl = await gsRun('loadPhotoChunks', artKey);
-        if(artDataUrl) u.officialArtImg = artDataUrl;
-      }catch(e){ /* no official artwork saved for this unit — fine */ }
+      const pointLabel = `จุดติดป้าย #${sIdx+1} (ป้ายที่ ${uIdx+1})`;
+      const artDataUrl = await tryLoadPhoto_(branchKey + '::' + s.id + '::' + uIdx + '::art', pointLabel + ' - รูป artwork');
+      if(artDataUrl) u.officialArtImg = artDataUrl;
       let gotLocationPhoto = false;
-      try{
-        const locKey = branchKey + '::' + s.id + '::' + uIdx + '::loc';
-        const locDataUrl = await gsRun('loadPhotoChunks', locKey);
-        if(locDataUrl){ u.locationPhoto = locDataUrl; gotLocationPhoto = true; }
-      }catch(e){ /* no location photo saved for this unit — fine (old data from before this fix) */ }
+      const locDataUrl = await tryLoadPhoto_(branchKey + '::' + s.id + '::' + uIdx + '::loc', pointLabel + ' - รูปสถานที่จริง');
+      if(locDataUrl){ u.locationPhoto = locDataUrl; gotLocationPhoto = true; }
       if(gotLocationPhoto){
         // มีรูปสถานที่จริงกู้คืนมา -> สร้างป้าย+รูปรวมใหม่จากรูปนี้ + ตำแหน่ง/ข้อมูลป้ายที่มีอยู่แล้ว
         // (แทนที่จะพึ่งรูปรวมที่เคยบันทึกไว้เฉยๆ) จะได้กลับมาลากปรับตำแหน่งป้ายต่อได้เลย ไม่ต้องลบรูปแล้วแนบใหม่
@@ -3133,37 +3140,35 @@ async function restorePhotosForBranch(branchKey){
       if(!u.photo){
         // รูปสถานที่จริงกู้ไม่ได้ (เช่น บันทึกไว้ตั้งแต่ก่อนอัปเดตนี้) หรือ recomposite ข้างบนพลาด
         // -> อย่างน้อยกู้รูปรวมเดิมมาโชว์ไว้ก่อน (ดูได้ แต่ปรับตำแหน่งป้ายต่อไม่ได้จนกว่าจะแนบรูปใหม่)
-        try{
-          const key = branchKey + '::' + s.id + '::' + uIdx;
-          const dataUrl = await gsRun('loadPhotoChunks', key);
-          if(dataUrl) u.photo = dataUrl;
-        }catch(e){ /* no photo saved for this unit — fine */ }
+        const dataUrl = await tryLoadPhoto_(branchKey + '::' + s.id + '::' + uIdx, pointLabel + ' - รูปรวม');
+        if(dataUrl) u.photo = dataUrl;
       }
     }
   }
   for(const h of hotels){
-    try{
-      const key = branchKey + '::hotel::' + h.id;
-      const dataUrl = await gsRun('loadPhotoChunks', key);
-      if(dataUrl) h.photo = dataUrl;
-    }catch(e){ /* no photo saved for this hotel — fine */ }
+    const dataUrl = await tryLoadPhoto_(branchKey + '::hotel::' + h.id, 'รูปโรงแรม/ที่พัก');
+    if(dataUrl) h.photo = dataUrl;
   }
   for(const p of parkings){
-    try{
-      const key = branchKey + '::parking::' + p.id;
-      const dataUrl = await gsRun('loadPhotoChunks', key);
-      if(dataUrl) p.photo = dataUrl;
-    }catch(e){ /* no photo saved for this parking spot — fine */ }
+    const dataUrl = await tryLoadPhoto_(branchKey + '::parking::' + p.id, 'รูปที่จอดรถ');
+    if(dataUrl) p.photo = dataUrl;
   }
-  try{
-    const key = branchKey + '::activityLayout';
-    const dataUrl = await gsRun('loadPhotoChunks', key);
+  {
+    const dataUrl = await tryLoadPhoto_(branchKey + '::activityLayout', 'รูปผัง Layout กิจกรรม');
     if(dataUrl) activityLayout.photo = dataUrl;
-  }catch(e){ /* no layout photo saved — fine */ }
+  }
   renderSignages();
   renderHotels();
   renderParkings();
   renderActivitySection();
+  if(loadFailures.length){
+    alert(
+      '⚠️ เช็ครูปไม่สำเร็จ ' + loadFailures.length + ' รายการ (เน็ตหรือ Apps Script มีปัญหาชั่วคราว):\n\n' +
+      loadFailures.join('\n') + '\n\n' +
+      'รูปพวกนี้ "ยังไม่ยืนยันว่าหายจริง" แค่เช็ครอบนี้ไม่สำเร็จ — กรุณากด "โหลด" สาขานี้ซ้ำอีกครั้งก่อน\n' +
+      'อย่าเพิ่งแนบรูปใหม่ทับช่องที่ดูเหมือนว่าง เพราะถ้าแนบใหม่ รูปเดิม (ถ้ามีอยู่จริง) จะถูกลบทิ้งถาวร'
+    );
+  }
 }
 
 // ---------- กันข้อมูลจุดติดป้ายหายจาก autosave ทับ (ดูคอมเมนต์ตรงประกาศตัวแปรด้านบน) ----------
