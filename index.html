@@ -3048,6 +3048,36 @@ async function gsRun(funcName, ...args){
   throw lastErr;
 }
 
+// ---------- สำรองข้อมูลฟอร์มไว้ในเบราว์เซอร์เครื่องนี้ด้วย (นอกจาก Google Sheet) ----------
+// Apps Script บางวันตอบสนองแย่มาก (เจอจริงหลายรอบ) ถ้าเซฟ/โหลดจากเซิร์ฟเวอร์ไม่ได้เลย อย่างน้อย
+// เครื่องที่พิมพ์อยู่ตอนนั้นควรยังมีสำเนาล่าสุดกู้กลับมาได้ — เก็บเฉพาะ jsonStr (ไม่มีรูปภาพ ขนาดเล็ก
+// ปลอดภัยกับโควตาเบราว์เซอร์) เก็บแค่ device นี้เท่านั้น ไม่ sync ข้ามเครื่อง/คนอื่นไม่เห็น
+const LOCAL_BACKUP_KEY = 'pgbLocalBackups';
+const LOCAL_BACKUP_MAX = 30; // กันโตไม่จำกัด เก็บแค่สาขาที่แก้ล่าสุด 30 สาขา
+// savedAt (Date.now()) มีความละเอียดแค่มิลลิวินาที ถ้าเซฟหลายสาขาติดกันเร็วมาก (เช่น import จำนวนมาก)
+// อาจได้เวลาเท่ากันจนเรียงลำดับผิด — ใช้ seq เป็นตัวตัดสินรองกันเหนียวไว้ด้วย
+let localBackupSeq_ = 0;
+function saveLocalBackup_(name, jsonStr){
+  if(!name) return;
+  try{
+    const raw = localStorage.getItem(LOCAL_BACKUP_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    all[name] = { jsonStr, savedAt: Date.now(), seq: ++localBackupSeq_, savedBy: currentUserName || '' };
+    const pruned = {};
+    Object.entries(all)
+      .sort((a, b) => (b[1].savedAt - a[1].savedAt) || ((b[1].seq||0) - (a[1].seq||0)))
+      .slice(0, LOCAL_BACKUP_MAX)
+      .forEach(([k, v]) => { pruned[k] = v; });
+    localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(pruned));
+  }catch(e){ console.error('บันทึกสำรองในเครื่องไม่สำเร็จ (ไม่กระทบการบันทึกขึ้นเซิร์ฟเวอร์)', e); }
+}
+function getLocalBackup_(name){
+  try{
+    const raw = localStorage.getItem(LOCAL_BACKUP_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    return all[name] || null;
+  }catch(e){ return null; }
+}
 async function saveSessionSilently(){
   if(restoringSessionCount > 0) return; // กันซ้ำ: เผื่อ timer ถูกตั้งไว้ก่อนเริ่มโหลด แล้วดันมาทำงานตอนกำลังโหลดพอดี
   const name = document.getElementById('branchName').value || document.getElementById('branchCode').value;
@@ -3060,6 +3090,7 @@ async function saveSessionSilently(){
   try{
     if(indicator){ indicator.textContent = 'กำลังบันทึก...'; indicator.style.opacity = '1'; }
     const { jsonStr } = collectStateForDraft();
+    saveLocalBackup_(name, jsonStr); // สำรองในเครื่องก่อนเสมอ ไม่ว่าจะเซฟขึ้นเซิร์ฟเวอร์สำเร็จไหม
     await gsRun('saveDraft', name, jsonStr, currentUserName);
     currentLoadedBranchKey = name;
     await refreshSavedList();
@@ -3216,11 +3247,12 @@ async function saveSession(){
   if(!signageCountDropGuard()) return;
   try{
     const { jsonStr } = collectStateForDraft();
+    saveLocalBackup_(name, jsonStr); // สำรองในเครื่องก่อนเสมอ ไม่ว่าจะเซฟขึ้นเซิร์ฟเวอร์สำเร็จไหม
     await gsRun('saveDraft', name, jsonStr, currentUserName);
     currentLoadedBranchKey = name;
     await refreshSavedList();
     generateFinal();
-  }catch(e){ alert('บันทึกไม่สำเร็จ: ' + e.message); }
+  }catch(e){ alert('บันทึกไม่สำเร็จ: ' + e.message + '\n\n(สำรองในเครื่องนี้ไว้แล้ว ลองกดบันทึกใหม่ได้เมื่อเน็ต/เซิร์ฟเวอร์กลับมาปกติ)'); }
 }
 async function loadSession(name){
   // กันบั๊ก "โหลดของเก่ายังไม่เสร็จ แต่ autosave ดันเซฟของว่างทับ": ระหว่างโหลด (อาจช้าหลายวินาที
@@ -3238,7 +3270,28 @@ async function loadSession(name){
     lastKnownSignageCount = signages.length;
     await restorePhotosForBranch(name);
     if(indicator){ indicator.textContent = '✓ โหลดข้อมูลเดิมของ "' + name + '" แล้ว'; indicator.style.opacity = '1'; }
-  }catch(e){ alert('โหลดไม่สำเร็จ: ' + e.message); }
+  }catch(e){
+    // โหลดจากเซิร์ฟเวอร์ไม่สำเร็จ — เช็คว่ามีสำรองในเครื่องนี้ไหมก่อนจะปล่อยผ่านแบบมือเปล่า
+    const backup = getLocalBackup_(name);
+    if(backup){
+      const when = new Date(backup.savedAt).toLocaleString('th-TH');
+      const useBackup = confirm(
+        `โหลดจากเซิร์ฟเวอร์ไม่สำเร็จ: ${e.message}\n\n` +
+        `พบสำเนาสำรองในเครื่องนี้ (บันทึกล่าสุด ${when}${backup.savedBy ? ' โดย ' + backup.savedBy : ''})\n` +
+        `⚠️ สำเนานี้อาจไม่ใช่ล่าสุด (ถ้ามีคนอื่นบันทึกทับหลังจากนี้ที่เครื่องอื่น จะไม่เห็นในนี้) และไม่มีรูปภาพ ต้องโหลดรูปจากเซิร์ฟเวอร์อีกทีภายหลัง\n\n` +
+        `กด "ตกลง" เพื่อใช้สำเนาสำรองนี้ไปก่อน / กด "ยกเลิก" เพื่อลองโหลดจากเซิร์ฟเวอร์ใหม่ภายหลัง`
+      );
+      if(useBackup){
+        applyState(JSON.parse(backup.jsonStr));
+        currentLoadedBranchKey = name;
+        dismissedDuplicateWarningFor = '';
+        lastKnownSignageCount = signages.length;
+        if(indicator){ indicator.textContent = '⚠ ใช้สำเนาสำรองในเครื่อง (' + when + ') — ยังไม่มีรูปภาพ ลอง "โหลด" ซ้ำภายหลังเพื่อดึงรูป'; indicator.style.opacity = '1'; }
+      }
+    }else{
+      alert('โหลดไม่สำเร็จ: ' + e.message);
+    }
+  }
   finally{
     restoringSessionCount = Math.max(0, restoringSessionCount - 1);
   }
