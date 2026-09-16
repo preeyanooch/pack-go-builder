@@ -3159,6 +3159,21 @@ async function savePhotoToSheet(ownerId, dataUrl){
 // จะโชว์ว่า "ไม่มีรูป" ทั้งที่จริงๆ มีอยู่บนเซิร์ฟเวอร์ — ถ้าผู้ใช้เข้าใจผิดแล้วแนบรูปใหม่ทับช่องนั้น
 // savePhotoToSheet จะลบรูปเดิมทิ้งจริงถาวรก่อนเขียนรูปใหม่ (ดูคอมเมนต์ที่นั่น) เท่ากับรูปเดิมหายจริง
 // ทางแก้: แยกสองเคสนี้ออกจากกัน แล้วเตือนผู้ใช้ชัดๆ ถ้าเช็คไม่สำเร็จ กันเผลอแนบรูปทับของจริง
+// รันงาน async หลายชิ้นพร้อมกัน แต่จำกัดจำนวนที่วิ่งพร้อมกันจริง ๆ ไว้ไม่เกิน `limit` —
+// เดิมโหลดรูปทีละรูปเรียงคิว (สาขาที่มีสิบกว่าจุดติดป้ายต้องขอรูปแยก 20-30 รอบ เรียงกันไป
+// รอบละหลายวินาทีถ้า Apps Script ไม่เสถียร รวมกันเลยช้ามาก) พอทำพร้อมกันจะเร็วขึ้นมาก แต่ไม่ยิง
+// พร้อมกันทีเดียวหมดทุกรูป (จะยิ่งซ้ำเติม Apps Script ที่ไม่เสถียรอยู่แล้วให้แย่กว่าเดิม)
+async function runWithConcurrencyLimit_(taskFns, limit){
+  let nextIdx = 0;
+  async function worker(){
+    while(nextIdx < taskFns.length){
+      const fn = taskFns[nextIdx++];
+      await fn();
+    }
+  }
+  const workerCount = Math.min(limit, taskFns.length);
+  await Promise.all(Array.from({length: workerCount}, worker));
+}
 async function restorePhotosForBranch(branchKey){
   if(!branchKey) return;
   const loadFailures = [];
@@ -3166,41 +3181,51 @@ async function restorePhotosForBranch(branchKey){
     try{ return await gsRun('loadPhotoChunks', key); }
     catch(e){ loadFailures.push(label); return null; }
   }
+  const tasks = [];
   for(let sIdx = 0; sIdx < signages.length; sIdx++){
     const s = signages[sIdx];
     for(let uIdx = 0; uIdx < (s.units||[]).length; uIdx++){
-      const u = s.units[uIdx];
-      const pointLabel = `จุดติดป้าย #${sIdx+1} (ป้ายที่ ${uIdx+1})`;
-      const artDataUrl = await tryLoadPhoto_(branchKey + '::' + s.id + '::' + uIdx + '::art', pointLabel + ' - รูป artwork');
-      if(artDataUrl) u.officialArtImg = artDataUrl;
-      let gotLocationPhoto = false;
-      const locDataUrl = await tryLoadPhoto_(branchKey + '::' + s.id + '::' + uIdx + '::loc', pointLabel + ' - รูปสถานที่จริง');
-      if(locDataUrl){ u.locationPhoto = locDataUrl; gotLocationPhoto = true; }
-      if(gotLocationPhoto){
-        // มีรูปสถานที่จริงกู้คืนมา -> สร้างป้าย+รูปรวมใหม่จากรูปนี้ + ตำแหน่ง/ข้อมูลป้ายที่มีอยู่แล้ว
-        // (แทนที่จะพึ่งรูปรวมที่เคยบันทึกไว้เฉยๆ) จะได้กลับมาลากปรับตำแหน่งป้ายต่อได้เลย ไม่ต้องลบรูปแล้วแนบใหม่
-        try{ await recompositeUnit(s.id, uIdx); }catch(e){ /* recomposite failed — fall through to stored photo below */ }
-      }
-      if(!u.photo){
-        // รูปสถานที่จริงกู้ไม่ได้ (เช่น บันทึกไว้ตั้งแต่ก่อนอัปเดตนี้) หรือ recomposite ข้างบนพลาด
-        // -> อย่างน้อยกู้รูปรวมเดิมมาโชว์ไว้ก่อน (ดูได้ แต่ปรับตำแหน่งป้ายต่อไม่ได้จนกว่าจะแนบรูปใหม่)
-        const dataUrl = await tryLoadPhoto_(branchKey + '::' + s.id + '::' + uIdx, pointLabel + ' - รูปรวม');
-        if(dataUrl) u.photo = dataUrl;
-      }
+      tasks.push(async () => {
+        const u = s.units[uIdx];
+        const pointLabel = `จุดติดป้าย #${sIdx+1} (ป้ายที่ ${uIdx+1})`;
+        const artDataUrl = await tryLoadPhoto_(branchKey + '::' + s.id + '::' + uIdx + '::art', pointLabel + ' - รูป artwork');
+        if(artDataUrl) u.officialArtImg = artDataUrl;
+        let gotLocationPhoto = false;
+        const locDataUrl = await tryLoadPhoto_(branchKey + '::' + s.id + '::' + uIdx + '::loc', pointLabel + ' - รูปสถานที่จริง');
+        if(locDataUrl){ u.locationPhoto = locDataUrl; gotLocationPhoto = true; }
+        if(gotLocationPhoto){
+          // มีรูปสถานที่จริงกู้คืนมา -> สร้างป้าย+รูปรวมใหม่จากรูปนี้ + ตำแหน่ง/ข้อมูลป้ายที่มีอยู่แล้ว
+          // (แทนที่จะพึ่งรูปรวมที่เคยบันทึกไว้เฉยๆ) จะได้กลับมาลากปรับตำแหน่งป้ายต่อได้เลย ไม่ต้องลบรูปแล้วแนบใหม่
+          // (recompositeUnit สร้าง canvas ของตัวเองทุกครั้ง แก้เฉพาะ unit นี้ ไม่แชร์สถานะกับจุดอื่น
+          // จึงรันพร้อมกันหลายจุดได้อย่างปลอดภัย)
+          try{ await recompositeUnit(s.id, uIdx); }catch(e){ /* recomposite failed — fall through to stored photo below */ }
+        }
+        if(!u.photo){
+          // รูปสถานที่จริงกู้ไม่ได้ (เช่น บันทึกไว้ตั้งแต่ก่อนอัปเดตนี้) หรือ recomposite ข้างบนพลาด
+          // -> อย่างน้อยกู้รูปรวมเดิมมาโชว์ไว้ก่อน (ดูได้ แต่ปรับตำแหน่งป้ายต่อไม่ได้จนกว่าจะแนบรูปใหม่)
+          const dataUrl = await tryLoadPhoto_(branchKey + '::' + s.id + '::' + uIdx, pointLabel + ' - รูปรวม');
+          if(dataUrl) u.photo = dataUrl;
+        }
+      });
     }
   }
   for(const h of hotels){
-    const dataUrl = await tryLoadPhoto_(branchKey + '::hotel::' + h.id, 'รูปโรงแรม/ที่พัก');
-    if(dataUrl) h.photo = dataUrl;
+    tasks.push(async () => {
+      const dataUrl = await tryLoadPhoto_(branchKey + '::hotel::' + h.id, 'รูปโรงแรม/ที่พัก');
+      if(dataUrl) h.photo = dataUrl;
+    });
   }
   for(const p of parkings){
-    const dataUrl = await tryLoadPhoto_(branchKey + '::parking::' + p.id, 'รูปที่จอดรถ');
-    if(dataUrl) p.photo = dataUrl;
+    tasks.push(async () => {
+      const dataUrl = await tryLoadPhoto_(branchKey + '::parking::' + p.id, 'รูปที่จอดรถ');
+      if(dataUrl) p.photo = dataUrl;
+    });
   }
-  {
+  tasks.push(async () => {
     const dataUrl = await tryLoadPhoto_(branchKey + '::activityLayout', 'รูปผัง Layout กิจกรรม');
     if(dataUrl) activityLayout.photo = dataUrl;
-  }
+  });
+  await runWithConcurrencyLimit_(tasks, 6);
   renderSignages();
   renderHotels();
   renderParkings();
