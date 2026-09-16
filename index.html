@@ -97,6 +97,19 @@
   .composer-controls{margin-top:12px; display:flex; flex-direction:column; gap:8px;}
   .composer-controls .row-inline{display:flex; align-items:center; gap:8px;}
   .composer-controls input[type=range]{flex:1; margin-bottom:0;}
+  /* ทำให้เห็นชัดว่า "กำลังทำงานอยู่" ไม่ใช่ค้าง/หาย — เดิม indicator ตัวเล็กสีเทาจางมองไม่ค่อยเห็น
+     โดยเฉพาะตอนโหลดสาขาที่อาจใช้เวลาหลายวินาทีเพราะ Apps Script ไม่เสถียร */
+  @keyframes pgbSpin{ to{ transform:rotate(360deg); } }
+  .pgb-spinner{
+    display:inline-block; width:14px; height:14px; margin-right:8px; vertical-align:-2px;
+    border:2px solid rgba(0,0,0,.15); border-top-color:var(--red, #c0392b);
+    border-radius:50%; animation:pgbSpin .7s linear infinite;
+  }
+  .pgb-loading-badge{
+    display:inline-flex; align-items:center; font-size:14px; font-weight:600;
+    color:#8a5a00; background:#fff6df; border:1px solid #ffe4a3;
+    border-radius:8px; padding:8px 12px;
+  }
 </style>
 </head>
 <body>
@@ -3260,7 +3273,12 @@ async function loadSession(name){
   if(autosaveTimer){ clearTimeout(autosaveTimer); autosaveTimer = null; }
   restoringSessionCount++;
   const indicator = document.getElementById('autosaveIndicator');
-  if(indicator){ indicator.textContent = 'กำลังโหลดข้อมูลเดิมของ "' + name + '"...'; indicator.style.opacity = '1'; }
+  // ใช้ badge + spinner ชัดๆ แทนตัวหนังสือสีจางเดิม — ตอนนี้การโหลดอาจกินเวลาหลายวินาที (Apps Script
+  // ไม่เสถียร) ถ้าไม่มีอะไรขยับให้เห็นเลย ผู้ใช้จะเข้าใจผิดว่าค้าง/ข้อมูลหาย ทั้งที่จริงกำลังทำงานอยู่
+  if(indicator){
+    indicator.innerHTML = '<span class="pgb-loading-badge"><span class="pgb-spinner"></span>กำลังโหลดข้อมูลเดิมของ "' + name + '" — กรุณารอสักครู่ (อาจนานถึง 30 วินาทีถ้าเซิร์ฟเวอร์ไม่เสถียร)</span>';
+    indicator.style.opacity = '1';
+  }
   try{
     const jsonStr = await gsRun('loadDraft', name);
     if(!jsonStr) return;
