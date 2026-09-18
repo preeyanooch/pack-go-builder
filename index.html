@@ -581,7 +581,10 @@ function updateRowTime(dayIdx, rowIdx, field, part, value){
   const cur = (dayPlans[dayIdx].rows[rowIdx][field] || '').split(':');
   let hh = cur[0] || '', mm = cur[1] || '';
   if(part==='hour') hh = value; else mm = value;
-  const combined = (hh && mm) ? (hh+':'+mm) : '';
+  // เดิมต้องเลือกทั้งชั่วโมง+นาทีครบคู่ก่อนถึงจะเก็บค่า (ไม่งั้น combined เป็น '' ทันที) ผลคือเลือก
+  // ชั่วโมงอย่างเดียวก่อน (ยังไม่ได้เลือกนาที) ค่าจะถูกเคลียร์ทิ้งเงียบๆ พอ renderDays() วาดใหม่
+  // dropdown ที่เพิ่งเลือกเลยโชว์เป็น "--" เหมือนไม่ได้เลือกอะไรเลย — เก็บค่าไว้แม้เลือกมาแค่ส่วนเดียว
+  const combined = (hh || mm) ? (hh+':'+mm) : '';
   dayPlans[dayIdx].rows[rowIdx][field] = combined;
   renderDays();
   scheduleAutosave();
