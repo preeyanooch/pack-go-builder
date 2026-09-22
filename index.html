@@ -3301,15 +3301,40 @@ async function loadSession(name){
   if(autosaveTimer){ clearTimeout(autosaveTimer); autosaveTimer = null; }
   restoringSessionCount++;
   const indicator = document.getElementById('autosaveIndicator');
+
+  // โชว์สำรองในเครื่อง (ถ้ามี) ขึ้นมาให้ดูได้ทันที ระหว่างรอเช็คของจริงกับเซิร์ฟเวอร์เงียบๆ เบื้องหลัง
+  // (stale-while-revalidate) — เดิมต้องจ้องจอว่าง/spinner รอจนกว่า Apps Script จะตอบ (บางทีถึง 30 วิ)
+  // ทำให้รู้สึกว่าเว็บช้ามาก ทั้งที่ข้อมูลของสาขานี้ (ถ้าเคยเปิด/บันทึกจากเครื่องนี้มาก่อน) มีอยู่แล้วในเครื่อง
+  // ยังไม่นับว่าโหลดสำเร็จจนกว่าเซิร์ฟเวอร์จะยืนยัน — แค่ทำให้ "รอ" ไม่รู้สึกช้า ไม่ได้ลดความถูกต้องของข้อมูล
+  const cachedBackup = getLocalBackup_(name);
+  let usedOptimisticCache = false;
+  if(cachedBackup){
+    try{
+      applyState(JSON.parse(cachedBackup.jsonStr));
+      currentLoadedBranchKey = name;
+      dismissedDuplicateWarningFor = '';
+      lastKnownSignageCount = signages.length;
+      usedOptimisticCache = true;
+    }catch(e){ /* สำรองในเครื่องเสีย/อ่านไม่ออก — ไม่เป็นไร ไปรอของจริงตามปกติด้านล่าง */ }
+  }
   // ใช้ badge + spinner ชัดๆ แทนตัวหนังสือสีจางเดิม — ตอนนี้การโหลดอาจกินเวลาหลายวินาที (Apps Script
   // ไม่เสถียร) ถ้าไม่มีอะไรขยับให้เห็นเลย ผู้ใช้จะเข้าใจผิดว่าค้าง/ข้อมูลหาย ทั้งที่จริงกำลังทำงานอยู่
   if(indicator){
-    indicator.innerHTML = '<span class="pgb-loading-badge"><span class="pgb-spinner"></span>กำลังโหลดข้อมูลเดิมของ "' + name + '" — กรุณารอสักครู่ (อาจนานถึง 30 วินาทีถ้าเซิร์ฟเวอร์ไม่เสถียร)</span>';
+    const msg = usedOptimisticCache
+      ? 'แสดงข้อมูลล่าสุดที่เคยบันทึกไว้ในเครื่องนี้ก่อน — กำลังเช็คกับเซิร์ฟเวอร์...'
+      : 'กำลังโหลดข้อมูลเดิมของ "' + name + '" — กรุณารอสักครู่ (อาจนานถึง 30 วินาทีถ้าเซิร์ฟเวอร์ไม่เสถียร)';
+    indicator.innerHTML = '<span class="pgb-loading-badge"><span class="pgb-spinner"></span>' + msg + '</span>';
     indicator.style.opacity = '1';
   }
   try{
     const jsonStr = await gsRun('loadDraft', name);
-    if(!jsonStr) return;
+    if(!jsonStr){
+      if(usedOptimisticCache && indicator){
+        indicator.textContent = '⚠ เซิร์ฟเวอร์ไม่พบข้อมูลสาขานี้ (ยังแสดงสำรองในเครื่องไว้ก่อน) ลอง "โหลด" ซ้ำอีกครั้ง';
+        indicator.style.opacity = '1';
+      }
+      return;
+    }
     applyState(JSON.parse(jsonStr));
     currentLoadedBranchKey = name;
     dismissedDuplicateWarningFor = '';
@@ -3317,49 +3342,79 @@ async function loadSession(name){
     await restorePhotosForBranch(name);
     if(indicator){ indicator.textContent = '✓ โหลดข้อมูลเดิมของ "' + name + '" แล้ว'; indicator.style.opacity = '1'; }
   }catch(e){
-    // โหลดจากเซิร์ฟเวอร์ไม่สำเร็จ — เช็คว่ามีสำรองในเครื่องนี้ไหมก่อนจะปล่อยผ่านแบบมือเปล่า
-    const backup = getLocalBackup_(name);
-    if(backup){
-      const when = new Date(backup.savedAt).toLocaleString('th-TH');
-      const useBackup = confirm(
-        `โหลดจากเซิร์ฟเวอร์ไม่สำเร็จ: ${e.message}\n\n` +
-        `พบสำเนาสำรองในเครื่องนี้ (บันทึกล่าสุด ${when}${backup.savedBy ? ' โดย ' + backup.savedBy : ''})\n` +
-        `⚠️ สำเนานี้อาจไม่ใช่ล่าสุด (ถ้ามีคนอื่นบันทึกทับหลังจากนี้ที่เครื่องอื่น จะไม่เห็นในนี้) และไม่มีรูปภาพ ต้องโหลดรูปจากเซิร์ฟเวอร์อีกทีภายหลัง\n\n` +
-        `กด "ตกลง" เพื่อใช้สำเนาสำรองนี้ไปก่อน / กด "ยกเลิก" เพื่อลองโหลดจากเซิร์ฟเวอร์ใหม่ภายหลัง`
-      );
-      if(useBackup){
-        applyState(JSON.parse(backup.jsonStr));
-        currentLoadedBranchKey = name;
-        dismissedDuplicateWarningFor = '';
-        lastKnownSignageCount = signages.length;
-        if(indicator){ indicator.textContent = '⚠ ใช้สำเนาสำรองในเครื่อง (' + when + ') — ยังไม่มีรูปภาพ ลอง "โหลด" ซ้ำภายหลังเพื่อดึงรูป'; indicator.style.opacity = '1'; }
+    if(usedOptimisticCache){
+      // โชว์สำรองไปตั้งแต่ต้นแล้ว ไม่ต้องเด้งถามซ้ำ แค่แจ้งเนียนๆ ว่ายังไม่ได้ยืนยันกับเซิร์ฟเวอร์
+      if(indicator){
+        indicator.textContent = '⚠ เช็คกับเซิร์ฟเวอร์ไม่สำเร็จ (' + e.message + ') — ยังแสดงสำรองในเครื่องไว้ก่อน ลอง "โหลด" ซ้ำภายหลัง';
+        indicator.style.opacity = '1';
       }
     }else{
-      alert('โหลดไม่สำเร็จ: ' + e.message);
+      // ยังไม่เคยมีสำรองในเครื่องนี้มาก่อน — เช็คอีกครั้งเผื่อมีสำรองจากที่อื่น (กันเคสหายากที่ backup ถูกเขียนระหว่างรอ)
+      const backup = getLocalBackup_(name);
+      if(backup){
+        const when = new Date(backup.savedAt).toLocaleString('th-TH');
+        const useBackup = confirm(
+          `โหลดจากเซิร์ฟเวอร์ไม่สำเร็จ: ${e.message}\n\n` +
+          `พบสำเนาสำรองในเครื่องนี้ (บันทึกล่าสุด ${when}${backup.savedBy ? ' โดย ' + backup.savedBy : ''})\n` +
+          `⚠️ สำเนานี้อาจไม่ใช่ล่าสุด (ถ้ามีคนอื่นบันทึกทับหลังจากนี้ที่เครื่องอื่น จะไม่เห็นในนี้) และไม่มีรูปภาพ ต้องโหลดรูปจากเซิร์ฟเวอร์อีกทีภายหลัง\n\n` +
+          `กด "ตกลง" เพื่อใช้สำเนาสำรองนี้ไปก่อน / กด "ยกเลิก" เพื่อลองโหลดจากเซิร์ฟเวอร์ใหม่ภายหลัง`
+        );
+        if(useBackup){
+          applyState(JSON.parse(backup.jsonStr));
+          currentLoadedBranchKey = name;
+          dismissedDuplicateWarningFor = '';
+          lastKnownSignageCount = signages.length;
+          if(indicator){ indicator.textContent = '⚠ ใช้สำเนาสำรองในเครื่อง (' + when + ') — ยังไม่มีรูปภาพ ลอง "โหลด" ซ้ำภายหลังเพื่อดึงรูป'; indicator.style.opacity = '1'; }
+        }
+      }else{
+        alert('โหลดไม่สำเร็จ: ' + e.message);
+      }
     }
   }
   finally{
     restoringSessionCount = Math.max(0, restoringSessionCount - 1);
   }
 }
+const SAVED_LIST_CACHE_KEY = 'pgbSavedListCache';
+function renderSavedListHtml_(names, stale){
+  const row = document.getElementById('savedRow');
+  if(!names || names.length===0){ row.innerHTML=''; return; }
+  const staleNote = stale ? ' <span style="color:var(--muted); font-weight:400;">(ล่าสุดที่เคยเห็น — กำลังเช็คของจริงกับเซิร์ฟเวอร์...)</span>' : '';
+  let html = '<div class="hint" style="margin-bottom:8px;">สาขาที่บันทึกไว้ (ทั้งทีมเห็นร่วมกัน)' + staleNote + ' — กด × เพื่อลบสาขาที่ทำเสร็จแล้ว:</div><div class="saved-list">';
+  names.forEach(name => {
+    const esc = name.replace(/'/g,"\\'");
+    html += `<div class="saved-chip" style="display:inline-flex; align-items:center; gap:6px;">`
+      + `<span onclick="loadSession('${esc}')" style="cursor:pointer;">${name}</span>`
+      + `<span onclick="event.stopPropagation(); deleteBranchUI('${esc}')" title="ลบสาขานี้" `
+      + `style="cursor:pointer; color:var(--red); font-weight:bold; padding:0 4px;">×</span>`
+      + `</div>`;
+  });
+  html += '</div>';
+  row.innerHTML = html;
+}
+// เดิมหน้านี้ว่างเปล่า/ค้างเฉยๆ ตลอดที่รอ listDrafts (บาง Apps Script ช้ามาก) ทำให้รู้สึกว่าเว็บช้า/พัง
+// ทั้งที่จริงกำลังทำงานอยู่ — โชว์รายชื่อล่าสุดที่เคยเห็น (เก็บไว้ในเครื่อง) ทันทีก่อน แล้วค่อยเช็คของจริง
+// เงียบๆ เบื้องหลัง พอได้ผลจริงมาค่อยอัปเดตทับ (stale-while-revalidate) — รู้สึกเร็วขึ้นทันทีโดยไม่ต้องรอ
+// Apps Script เร็วขึ้นจริงๆ
 async function refreshSavedList(){
   const row = document.getElementById('savedRow');
+  let cachedNames = null;
+  try{ cachedNames = JSON.parse(localStorage.getItem(SAVED_LIST_CACHE_KEY) || 'null'); }catch(e){}
+  if(cachedNames && cachedNames.length){
+    SAVED_DRAFT_NAMES = cachedNames;
+    renderSavedListHtml_(cachedNames, true);
+  }
   try{
     const names = await gsRun('listDrafts');
     SAVED_DRAFT_NAMES = names || [];
-    if(!names || names.length===0){ row.innerHTML=''; return; }
-    let html = '<div class="hint" style="margin-bottom:8px;">สาขาที่บันทึกไว้ (ทั้งทีมเห็นร่วมกัน) — กด × เพื่อลบสาขาที่ทำเสร็จแล้ว:</div><div class="saved-list">';
-    names.forEach(name => {
-      const esc = name.replace(/'/g,"\\'");
-      html += `<div class="saved-chip" style="display:inline-flex; align-items:center; gap:6px;">`
-        + `<span onclick="loadSession('${esc}')" style="cursor:pointer;">${name}</span>`
-        + `<span onclick="event.stopPropagation(); deleteBranchUI('${esc}')" title="ลบสาขานี้" `
-        + `style="cursor:pointer; color:var(--red); font-weight:bold; padding:0 4px;">×</span>`
-        + `</div>`;
-    });
-    html += '</div>';
-    row.innerHTML = html;
-  }catch(e){ row.innerHTML = '<div class="hint" style="color:var(--red)">โหลดรายชื่อสาขาไม่สำเร็จ: '+e.message+'</div>'; }
+    try{ localStorage.setItem(SAVED_LIST_CACHE_KEY, JSON.stringify(SAVED_DRAFT_NAMES)); }catch(e){}
+    renderSavedListHtml_(SAVED_DRAFT_NAMES, false);
+  }catch(e){
+    // เช็คของจริงไม่สำเร็จ — ถ้ามีของเก่าโชว์อยู่แล้ว ปล่อยไว้แบบนั้นดีกว่า (ยังใช้งานต่อได้) ไม่ต้องทับด้วย error
+    if(!cachedNames || !cachedNames.length){
+      row.innerHTML = '<div class="hint" style="color:var(--red)">โหลดรายชื่อสาขาไม่สำเร็จ: '+e.message+'</div>';
+    }
+  }
 }
 // ลบสาขาที่ "ทำเสร็จแล้ว" ออกจากฐานข้อมูลถาวร (draft + รูปทุกรูปของสาขานั้น) — ยิ่งข้อมูลสะสมเยอะ
 // backend ยิ่งช้าลงเรื่อยๆ เพราะทุกครั้งที่บันทึก/โหลด/ดูรายชื่อ ระบบอ่าน "ทั้งชีต" มาสแกนเสมอ
