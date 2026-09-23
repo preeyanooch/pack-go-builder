@@ -65,6 +65,8 @@
   .subcard{border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:12px; background:#FBFAF8; position:relative;}
   .subcard .remove-btn{position:absolute; top:10px; right:10px;}
   .subcard-title{font-weight:700; font-size:13.5px; margin-bottom:10px;}
+  .point-shared-box{background:#FFF6E9; border:1px solid #F0DDB8; border-left:4px solid var(--red); border-radius:8px; padding:14px; margin-bottom:14px;}
+  .point-shared-box-label{font-weight:700; font-size:12.5px; color:var(--red-dark); text-transform:uppercase; letter-spacing:.04em; margin-bottom:10px;}
 
   .hint{font-size:12.5px; color:var(--muted); margin-top:4px;}
   .error{background:#FDECEC; border:1px solid #F4B6B6; color:#8a1f1f; padding:10px 14px; border-radius:8px; font-size:13px; margin-top:10px;}
@@ -205,7 +207,7 @@
     </div>
     <div class="row">
       <div><label>วันเปิดสาขา (วันแรก)</label><input type="date" id="openStart" onchange="renderAll()"></div>
-      <div><label>วันเปิดสาขา (วันสุดท้าย) — ปกติ +4 วัน</label><input type="date" id="openEnd" onchange="renderAll()"></div>
+      <div><label>วันเปิดสาขา (วันสุดท้าย) — คำนวณอัตโนมัติ +4 วัน</label><input type="date" id="openEnd" disabled></div>
     </div>
     <div class="readout" id="dateReadout">กรอกวันเปิดสาขาเพื่อคำนวณวันติดตั้ง/รื้อถอนอัตโนมัติ <span class="auto-badge">auto</span></div>
   </div>
@@ -455,13 +457,14 @@ function addDays(dateStr, n){
 
 function renderAll(){
   const start = document.getElementById('openStart').value;
-  const end = document.getElementById('openEnd').value;
   const box = document.getElementById('dateReadout');
   if(!start){
+    document.getElementById('openEnd').value = '';
     box.innerHTML = 'กรอกวันเปิดสาขาเพื่อคำนวณวันติดตั้ง/รื้อถอนอัตโนมัติ <span class="auto-badge">auto</span>';
     scheduleAutosave();
     return;
   }
+  document.getElementById('openEnd').value = addDays(start, 4);
   const install = addDays(start, -7);
   const removal = addDays(start, 5);
   box.innerHTML = `<b>ติดตั้งป้าย:</b> ${fmtDate(install)} (D-7) &nbsp;|&nbsp; <b>รื้อถอน:</b> ${fmtDate(removal)} (Day 6) <span class="auto-badge">auto</span>`;
@@ -1979,26 +1982,25 @@ function renderSignages(){
     div.innerHTML = `
       <button class="danger small remove-btn" onclick="removeSignage('${s.id}')">ลบ</button>
       <div class="subcard-title">จุดที่ ${idx+1}</div>
-      <div class="row">
-        <div><label>จำนวน (ป้าย)</label><input type="number" min="1" value="${s.qty}" oninput="updateSignage('${s.id}','qty',this.value)"></div>
-      </div>
-      <div class="hint" style="margin:8px 0;">1 จุด = 1 พิกัด + 1 รูปสถานที่จริง ใช้ร่วมกันทุกป้าย — ส่วนแบบป้าย/ขนาด/ลูกศร/ระยะทางเลือกแยกทีละป้ายได้ด้านล่าง (จุดเดียวกันมีป้ายคนละไซส์ได้)</div>
-      <div class="row" style="align-items:flex-end;">
-        <div><label>พิกัด (lat, long)</label><input type="text" value="${(units[0]&&units[0].coords)||''}" placeholder="เช่น 12.674625, 101.272150" oninput="updateSignageCoords('${s.id}',this.value)" onpaste="handleSignageCoordsPaste(event,'${s.id}')"></div>
-        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="useGPSForSignage('${s.id}')">📍 ใช้ตำแหน่งปัจจุบัน</button></div>
-      </div>
-      <div class="hint" style="margin-top:2px; margin-bottom:8px;">พิมพ์เองได้ (ถ้าไม่ได้ปักหน้างาน) หรือวางลิงก์/พิกัดที่แชร์จาก LINE ได้เลย — รองรับทั้งแบบทศนิยมและแบบองศา (เช่น 13°21'25.2"N 99°56'12.6"E) ระบบจะแยกพิกัดให้อัตโนมัติ</div>
-      ${dupWarningHtml}
-      <label>รูปสถานที่จริง (1 รูปต่อจุด — ใช้ร่วมกันทุกป้ายในจุดนี้)</label>
-      <div class="row" style="align-items:center;">
-        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="document.getElementById('locPhotoInput-${s.id}').click()">📎 แนบรูปสถานที่จริง</button>
-          <input type="file" id="locPhotoInput-${s.id}" accept="image/*" capture="environment" style="display:none" onchange="handleSignageLocationPhoto('${s.id}',this)"></div>
-        ${(units[0]&&units[0].locationPhoto) ? `<div style="flex:0 0 auto;"><img src="${units[0].locationPhoto}" style="height:56px; border-radius:6px; border:1px solid var(--line); cursor:zoom-in;" onclick="previewPhoto(this.src)"></div><div style="flex:0 0 auto;"><button class="danger small" onclick="removeSignagePhoto('${s.id}')">ลบรูป</button></div>` : '<div class="hint" style="flex:1;">ยังไม่ได้แนบรูป — ระบบจะจับพิกัด GPS ให้อัตโนมัติตอนแนบ (ถ้ายังไม่มีพิกัด)</div>'}
-      </div>
-      ${photoStatusBadgeForStatus_(pointPhotoStatus_(s), "retryPointPhotoSave('" + s.id + "')")}
-      <div class="row" style="margin-top:6px; margin-bottom:8px;">
-        <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="openDesignComposer('${s.id}',0)">🎨 ปรับตำแหน่งป้ายทุกป้ายบนรูปเดียว (ลากวางได้)</button></div>
-        <div class="hint" style="flex:1; align-self:center;">${(units[0]&&units[0].locationPhoto) ? 'เห็นทุกป้ายพร้อมกัน ลากจัดตำแหน่งทีละป้ายได้เลย' : 'แนบรูปสถานที่จริงก่อน ถึงจะจัดตำแหน่งได้'}</div>
+      <div class="point-shared-box">
+        <div class="point-shared-box-label">ตั้งค่าจุดนี้ — ใช้ร่วมกันทุกป้าย</div>
+        <div class="row">
+          <div><label>จำนวน (ป้าย)</label><input type="number" min="1" value="${s.qty}" oninput="updateSignage('${s.id}','qty',this.value)"></div>
+        </div>
+        <div class="hint" style="margin:8px 0;">1 จุด = 1 พิกัด + 1 รูปสถานที่จริง ใช้ร่วมกันทุกป้าย — ส่วนแบบป้าย/ขนาด/ลูกศร/ระยะทางเลือกแยกทีละป้ายได้ด้านล่าง (จุดเดียวกันมีป้ายคนละไซส์ได้)</div>
+        <div class="row" style="align-items:flex-end;">
+          <div><label>พิกัด (lat, long)</label><input type="text" value="${(units[0]&&units[0].coords)||''}" placeholder="เช่น 12.674625, 101.272150" oninput="updateSignageCoords('${s.id}',this.value)" onpaste="handleSignageCoordsPaste(event,'${s.id}')"></div>
+          <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="useGPSForSignage('${s.id}')">📍 ใช้ตำแหน่งปัจจุบัน</button></div>
+        </div>
+        <div class="hint" style="margin-top:2px; margin-bottom:8px;">พิมพ์เองได้ (ถ้าไม่ได้ปักหน้างาน) หรือวางลิงก์/พิกัดที่แชร์จาก LINE ได้เลย — รองรับทั้งแบบทศนิยมและแบบองศา (เช่น 13°21'25.2"N 99°56'12.6"E) ระบบจะแยกพิกัดให้อัตโนมัติ</div>
+        ${dupWarningHtml}
+        <label>รูปสถานที่จริง (1 รูปต่อจุด — ใช้ร่วมกันทุกป้ายในจุดนี้)</label>
+        <div class="row" style="align-items:center;">
+          <div style="flex:0 0 auto;"><button class="ghost small" type="button" onclick="document.getElementById('locPhotoInput-${s.id}').click()">📎 แนบรูปสถานที่จริง</button>
+            <input type="file" id="locPhotoInput-${s.id}" accept="image/*" capture="environment" style="display:none" onchange="handleSignageLocationPhoto('${s.id}',this)"></div>
+          ${(units[0]&&units[0].locationPhoto) ? `<div style="flex:0 0 auto;"><img src="${units[0].locationPhoto}" style="height:56px; border-radius:6px; border:1px solid var(--line); cursor:zoom-in;" onclick="previewPhoto(this.src)"></div><div style="flex:0 0 auto;"><button class="danger small" onclick="removeSignagePhoto('${s.id}')">ลบรูป</button></div>` : '<div class="hint" style="flex:1;">ยังไม่ได้แนบรูป — ระบบจะจับพิกัด GPS ให้อัตโนมัติตอนแนบ (ถ้ายังไม่มีพิกัด)</div>'}
+        </div>
+        ${photoStatusBadgeForStatus_(pointPhotoStatus_(s), "retryPointPhotoSave('" + s.id + "')")}
       </div>
       ${unitsHtml}
       <label>หมายเหตุ (เหตุผลเลือกจุดนี้ — รวมทั้งจุด)</label>
