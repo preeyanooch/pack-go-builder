@@ -3025,9 +3025,8 @@ function initLoginGate(){
   document.getElementById('gateName').addEventListener('keydown', (ev) => { if(ev.key === 'Enter') document.getElementById('gatePassword').focus(); });
 }
 
-// ทางเลี่ยงบั๊กของ google.script.run: ยิง HTTP ตรงไปที่ตัว web app เอง (ผ่าน doPost)
-// แทนที่จะพึ่ง iframe sandbox ของ Google ที่พังอยู่ตอนนี้
-const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwxYQXQ0zXpQw3lGAlsyRQzettakMZR1D0c6-yEMlZV2PafgTesZSwTIbDgOnyPaz29/exec";
+// backend ใหม่: Vercel + Supabase แทน Apps Script เดิม (เร็วกว่า ไม่มีบั๊ก Drive สุ่ม ๆ)
+const WEBAPP_URL = "https://pack-go-builder-backend.vercel.app/api/gsrun";
 // Apps Script /exec บางครั้งตอบกลับเป็นหน้า error ของ Google Drive แทนผลลัพธ์จริงแบบสุ่ม ๆ
 // (บั๊กที่รู้จักกันดีของ Google เอง ไม่ใช่จากโค้ดนี้) — ลองใหม่เงียบ ๆ ก่อนค่อยแจ้ง error จริง
 const GSRUN_MAX_RETRIES = 3;
