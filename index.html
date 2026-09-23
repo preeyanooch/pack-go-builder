@@ -353,7 +353,7 @@
   <div class="composer-box">
     <div class="composer-header">
       <h3>ปักจุดบนผัง Layout</h3>
-      <button class="ghost small" type="button" onclick="closeLayoutComposer()">✕ เสร็จแล้ว</button>
+      <button class="ghost small" type="button" onclick="cancelLayoutComposer()">✕ ยกเลิก</button>
     </div>
     <div class="hint" style="margin-bottom:8px;">คลิก/แตะบนรูปเพื่อเพิ่มจุดใหม่ตรงตำแหน่งนั้น — ลากจุดที่มีอยู่เพื่อย้ายตำแหน่ง แล้วพิมพ์อธิบายความหมายแต่ละจุดด้านล่าง</div>
     <div class="composer-stage" id="layoutComposerStage" style="cursor:crosshair;">
@@ -363,7 +363,8 @@
       <div id="layoutMarkerList"></div>
       <button class="ghost small" type="button" onclick="addLayoutMarkerAtCenter()">+ เพิ่มจุด (กลางรูป)</button>
       <div class="row-inline" style="justify-content:flex-end;">
-        <button class="secondary" type="button" onclick="closeLayoutComposer()">✅ เสร็จแล้ว</button>
+        <button class="ghost" type="button" onclick="cancelLayoutComposer()">ยกเลิก</button>
+        <button class="secondary" type="button" onclick="closeLayoutComposer()">✅ บันทึก</button>
       </div>
     </div>
   </div>
@@ -2400,8 +2401,10 @@ function renderActivitySection(){
   `;
 }
 let layoutComposerDragHandlersAttached = false;
+let layoutMarkerSnapshot_ = null;
 function openLayoutComposer(){
   if(!activityLayout.photo){ alert('แนบรูป Layout ก่อน'); return; }
+  layoutMarkerSnapshot_ = JSON.parse(JSON.stringify(activityLayout.markers||[]));
   const bg = document.getElementById('layoutComposerBg');
   bg.src = activityLayout.photo;
   bg.onload = renderLayoutComposerMarkers;
@@ -2411,6 +2414,15 @@ function openLayoutComposer(){
   renderLayoutMarkerList();
 }
 function closeLayoutComposer(){
+  layoutMarkerSnapshot_ = null;
+  document.getElementById('layoutComposerOverlay').classList.add('hidden');
+  renderActivitySection();
+  scheduleAutosave();
+}
+// ยกเลิก — คืนจุดทั้งหมดกลับไปเป็นก่อนเปิดหน้าต่างนี้ (ไม่เก็บสิ่งที่เพิ่ม/ลาก/ลบระหว่างแก้ไข)
+function cancelLayoutComposer(){
+  activityLayout.markers = layoutMarkerSnapshot_ ? layoutMarkerSnapshot_ : (activityLayout.markers||[]);
+  layoutMarkerSnapshot_ = null;
   document.getElementById('layoutComposerOverlay').classList.add('hidden');
   renderActivitySection();
   scheduleAutosave();
