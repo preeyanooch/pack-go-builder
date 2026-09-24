@@ -30,7 +30,7 @@ function doPost(e) {
     const whitelist = {
       checkLogin, saveDraft, loadDraft, listDrafts, getBranchMasterData,
       savePhotoChunk, loadPhotoChunks, deletePhotoChunks, createPackGoSlides,
-      deleteBranchCompletely
+      deleteBranchCompletely, dumpAllPhotoChunks
     };
     const fn = whitelist[fnName];
     if (!fn) throw new Error('ไม่รู้จักคำสั่ง: ' + fnName);
@@ -193,6 +193,20 @@ function deleteBranchCompletely(name) {
     }
   }
   return { deletedDraft: deletedDraft, deletedPhotoRows: deletedPhotoRows };
+}
+
+/**
+ * Dump every row of the Photos sheet as-is (key, chunkIndex, chunkData) —
+ * ใช้ครั้งเดียวสำหรับย้ายรูปทั้งหมดไปฐานข้อมูลใหม่ (Supabase) เท่านั้น
+ */
+function dumpAllPhotoChunks() {
+  const sheet = getPhotoSheet_();
+  const data = sheet.getDataRange().getValues();
+  const rows = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) rows.push([String(data[i][0]), Number(data[i][1]), String(data[i][2])]);
+  }
+  return rows;
 }
 
 /**
