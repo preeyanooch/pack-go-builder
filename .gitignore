@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Secrets / environment
+.env
+.env.*
+
+# Dependencies & build
+node_modules/
+.vercel/
+
+# Editors
+.vscode/
+.idea/
+
+# Logs
+*.log
