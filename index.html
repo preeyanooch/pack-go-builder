@@ -2998,8 +2998,20 @@ function scheduleAutosave(){
 }
 // ---------- Login gate (personal password, per-person) ----------
 let currentUserName = '';
+// บัตรผ่าน (token) ที่เซิร์ฟเวอร์ออกให้ตอนเข้าสู่ระบบสำเร็จ — แนบไปกับทุกคำสั่ง ไม่มี/หมดอายุ = เซิร์ฟเวอร์ตอบ AUTH_REQUIRED
+let authToken = '';
 function showGate(){ document.getElementById('loginGate').classList.remove('hidden'); }
 function hideGate(){ document.getElementById('loginGate').classList.add('hidden'); }
+// เซิร์ฟเวอร์บอกว่า token ไม่ถูกต้อง/หมดอายุ (รวมถึงหน้าเว็บเก่าที่ค้างเปิดไว้ในมือถือ) -> ล้าง session แล้วเด้งหน้าเข้าสู่ระบบ
+// ข้อมูลที่กรอกค้างในหน้านี้ยังอยู่ในเครื่อง เข้าสู่ระบบใหม่แล้วทำต่อได้เลย
+function handleAuthRequired_(){
+  authToken = '';
+  currentUserName = '';
+  try{ sessionStorage.removeItem('pgbAuthToken'); sessionStorage.removeItem('pgbUserName'); }catch(e){}
+  if(autosaveTimer){ clearTimeout(autosaveTimer); autosaveTimer = null; }
+  document.getElementById('gateErr').textContent = 'หมดเวลาการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่ (ข้อมูลที่กรอกไว้ในหน้านี้ยังอยู่)';
+  showGate();
+}
 async function attemptLogin(){
   const nameEl = document.getElementById('gateName');
   const passEl = document.getElementById('gatePassword');
@@ -3010,13 +3022,22 @@ async function attemptLogin(){
   if(!name || !pass){ errEl.textContent = 'กรุณากรอกชื่อและรหัสส่วนตัว'; return; }
   try{
     errEl.textContent = 'กำลังตรวจสอบ...';
-    const ok = await gsRun('checkLogin', name, pass);
-    if(ok){
-      currentUserName = name;
-      try{ sessionStorage.setItem('pgbUserName', name); }catch(e){}
+    const result = await gsRun('checkLogin', name, pass);
+    // result === true = backend รุ่นเก่าที่ยังไม่มีระบบ token (ช่วงรอ deploy) — ให้เข้าได้ไปก่อน
+    // พอ backend ใหม่ขึ้นแล้ว คำสั่งถัดไปจะได้ AUTH_REQUIRED แล้วเด้งให้เข้าสู่ระบบใหม่เอง (ลบเงื่อนไขนี้ได้หลัง deploy ครบ)
+    if(result && (result.token || result === true)){
+      authToken = result.token || '';
+      currentUserName = result.name || name;
+      try{
+        sessionStorage.setItem('pgbAuthToken', authToken);
+        sessionStorage.setItem('pgbUserName', currentUserName);
+      }catch(e){}
       passEl.value = '';
       errEl.textContent = '';
       hideGate();
+      // ตอนเปิดหน้าเว็บยังไม่มี token เลยยังโหลดสองอย่างนี้ไม่ได้ — โหลดหลังเข้าสู่ระบบแทน
+      loadBranchMaster();
+      refreshSavedList();
     }else{
       errEl.textContent = 'ชื่อหรือรหัสไม่ถูกต้อง กรุณาลองใหม่';
     }
@@ -3026,10 +3047,15 @@ async function attemptLogin(){
 }
 function initLoginGate(){
   document.getElementById('gateLogo').src = SIGN_DEFAULT_LOGO.src;
-  let saved = '';
-  try{ saved = sessionStorage.getItem('pgbUserName') || ''; }catch(e){}
-  if(saved){
+  let saved = '', savedToken = '';
+  try{
+    saved = sessionStorage.getItem('pgbUserName') || '';
+    savedToken = sessionStorage.getItem('pgbAuthToken') || '';
+  }catch(e){}
+  // ต้องมีทั้งชื่อและ token — มีแค่ชื่อ (session แบบเก่าก่อนมีระบบ token) ให้เข้าสู่ระบบใหม่
+  if(saved && savedToken){
     currentUserName = saved;
+    authToken = savedToken;
     hideGate();
   }else{
     showGate();
@@ -3050,7 +3076,7 @@ async function gsRunAttempt_(funcName, args){
   const res = await fetch(WEBAPP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // เลี่ยง CORS preflight
-    body: JSON.stringify({ fn: funcName, args })
+    body: JSON.stringify({ fn: funcName, args, token: authToken })
   });
   const text = await res.text();
   let data;
@@ -3058,6 +3084,10 @@ async function gsRunAttempt_(funcName, args){
     data = JSON.parse(text);
   }catch(parseErr){
     throw new Error('เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง (Google Apps Script ล่มชั่วคราว)');
+  }
+  if(data && !data.ok && data.code === 'AUTH_REQUIRED'){
+    handleAuthRequired_();
+    throw new Error(data.error || 'กรุณาเข้าสู่ระบบใหม่'); // ข้อความนี้ไม่ตรงเงื่อนไข retry ของ gsRun จึงไม่ยิงซ้ำ
   }
   if(!data || !data.ok){
     throw new Error((data && data.error) || 'เรียกใช้งานไม่สำเร็จ');
@@ -3512,7 +3542,7 @@ async function loadBranchMaster(){
 // init
 document.getElementById('headerLogo').src = SIGN_DEFAULT_LOGO.src;
 initLoginGate();
-loadBranchMaster();
+if(authToken) loadBranchMaster(); // ยังไม่ได้เข้าสู่ระบบ -> attemptLogin จะโหลดให้หลังเข้าสู่ระบบสำเร็จ
 populateSMAOptions();
 populateStoreHourSelects();
 DEFAULT_HELP.forEach(([n,q]) => addHelpItem(n,q));
@@ -3522,7 +3552,7 @@ renderParkings();
 renderActivitySection();
 renderAll();
 renderSignageSummary();
-refreshSavedList();
+if(authToken) refreshSavedList();
 </script>
 </body>
 </html>

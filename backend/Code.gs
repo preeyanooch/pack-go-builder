@@ -27,10 +27,11 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents);
     const fnName = body.fn;
     const args = Array.isArray(body.args) ? body.args : [];
+    // ข้อมูลสาขา/รูป/การเข้าสู่ระบบย้ายไป Supabase (ผ่าน proxy บน Vercel) หมดแล้ว — ที่นี่เหลือแค่
+    // งานที่ต้องใช้ Google จริง ๆ: สร้างสไลด์ + รายชื่อสาขากลาง ฟังก์ชันเก่าที่เหลือในไฟล์เรียกจากภายนอกไม่ได้แล้ว
+    // (ปิดไว้กันคนที่รู้ลิงก์ /exec ยิงตรงมาอ่าน/เขียน/ลบข้อมูลในชีตเก่า)
     const whitelist = {
-      checkLogin, saveDraft, loadDraft, listDrafts, getBranchMasterData,
-      savePhotoChunk, loadPhotoChunks, deletePhotoChunks, createPackGoSlides,
-      deleteBranchCompletely, dumpAllPhotoChunks
+      getBranchMasterData, createPackGoSlides
     };
     const fn = whitelist[fnName];
     if (!fn) throw new Error('ไม่รู้จักคำสั่ง: ' + fnName);
@@ -193,20 +194,6 @@ function deleteBranchCompletely(name) {
     }
   }
   return { deletedDraft: deletedDraft, deletedPhotoRows: deletedPhotoRows };
-}
-
-/**
- * Dump every row of the Photos sheet as-is (key, chunkIndex, chunkData) —
- * ใช้ครั้งเดียวสำหรับย้ายรูปทั้งหมดไปฐานข้อมูลใหม่ (Supabase) เท่านั้น
- */
-function dumpAllPhotoChunks() {
-  const sheet = getPhotoSheet_();
-  const data = sheet.getDataRange().getValues();
-  const rows = [];
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0]) rows.push([String(data[i][0]), Number(data[i][1]), String(data[i][2])]);
-  }
-  return rows;
 }
 
 /**
