@@ -277,8 +277,19 @@
     <button class="secondary" onclick="addParking()">+ เพิ่มที่จอดรถ</button>
   </div>
 
-  <!-- STEP 9: SUMMARY -->
-  <div class="step-label"><div class="step-num">9</div><h2>สรุปสำหรับ MKT + จัดซื้อ</h2><span class="note">รวมป้ายอัตโนมัติจาก Step 5</span></div>
+  <!-- STEP 9: SHOP LEADS -->
+  <div class="step-label"><div class="step-num">9</div><h2>Lead ร้านค้า</h2><span class="note">บังคับ — ต้องหาร้านให้ได้ 1.5 เท่าของจำนวนล็อค</span></div>
+  <div class="card">
+    <div class="row">
+      <div><label>จำนวนล็อคเช่าของสาขานี้</label><input type="number" inputmode="numeric" min="1" step="1" id="shopLotCount" placeholder="เช่น 4" oninput="updateShopLotCount(this.value)"></div>
+    </div>
+    <div id="shopLeadProgress" class="readout"></div>
+    <div id="shopLeadContainer"></div>
+    <button class="secondary" onclick="addShopLead()">+ เพิ่มร้านค้า</button>
+  </div>
+
+  <!-- STEP 10: SUMMARY -->
+  <div class="step-label"><div class="step-num">10</div><h2>สรุปสำหรับ MKT + จัดซื้อ</h2><span class="note">รวมป้ายอัตโนมัติจาก Step 5</span></div>
   <div class="card">
     <div class="row">
       <div><label>ต้องการ Artwork ภายในวันที่</label><input type="date" id="artworkDeadline" onchange="scheduleAutosave()"></div>
@@ -390,6 +401,7 @@ const helpItems = [];
 let dayPlans = [];
 const hotels = [];
 const parkings = [];
+const shopLeads = [];
 let activityLayout = { photo: '', markers: [], slideLayout: 'top' };
 
 // ==================== สถานะบันทึกรูปขึ้นเซิร์ฟเวอร์ (แสดงเป็นป้ายติดที่รูปแทน popup) ====================
@@ -2309,6 +2321,122 @@ function renderParkings(){
   if(parkings.length===0) container.innerHTML = '<div class="hint">ยังไม่มีที่จอดรถ — กด "+ เพิ่มที่จอดรถ" ถ้ามีให้กรอก (ไม่บังคับ)</div>';
 }
 
+// ---------- Shop leads (บังคับ: หาร้านให้ได้ 1.5 เท่าของจำนวนล็อคเช่า เพื่อให้ล็อคเต็มตลอด 5 วันงาน) ----------
+const SHOP_LEAD_MULTIPLIER = 1.5;
+function escAttr_(v){
+  return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function makeEmptyShopLead(){
+  return { id: 'sl' + Date.now() + Math.random(), shopName: '', phone: '', product: '', notes: '' };
+}
+function shopLeadPhoneDigits_(phone){
+  return String(phone||'').replace(/\D/g, '');
+}
+// ร้านที่นับว่า "ครบ" = มีชื่อร้าน + เบอร์อย่างน้อย 9 หลัก และเบอร์ไม่ซ้ำกับร้านก่อนหน้า
+function shopLeadStatus(){
+  const lots = parseInt(document.getElementById('shopLotCount').value, 10);
+  const lotCount = lots > 0 ? lots : 0;
+  const target = Math.ceil(lotCount * SHOP_LEAD_MULTIPLIER);
+  const seenPhones = new Set();
+  const rowState = {};
+  let valid = 0;
+  shopLeads.forEach(l => {
+    const digits = shopLeadPhoneDigits_(l.phone);
+    const hasName = !!String(l.shopName||'').trim();
+    if(!hasName && !digits){ rowState[l.id] = 'empty'; return; }
+    if(!hasName || digits.length < 9){ rowState[l.id] = 'incomplete'; return; }
+    if(seenPhones.has(digits)){ rowState[l.id] = 'duplicate'; return; }
+    seenPhones.add(digits);
+    rowState[l.id] = 'ok';
+    valid++;
+  });
+  return { lotCount, target, valid, rowState, pass: lotCount > 0 && valid >= target };
+}
+function renderShopLeadProgress(){
+  const box = document.getElementById('shopLeadProgress');
+  if(!box) return;
+  const st = shopLeadStatus();
+  if(!st.lotCount){
+    box.innerHTML = '⚠️ <b>ยังไม่ผ่าน</b> — กรอกจำนวนล็อคเช่าก่อน ระบบจะคำนวณว่าต้องหาร้านกี่ร้าน';
+    box.style.borderColor = 'var(--red)';
+    return;
+  }
+  const remain = Math.max(0, st.target - st.valid);
+  box.innerHTML = st.pass
+    ? `✅ <b>ผ่านแล้ว</b> — ${st.lotCount} ล็อค ต้องหา ${st.target} ร้าน · กรอกครบแล้ว <b>${st.valid}</b> ร้าน`
+    : `⚠️ <b>ยังไม่ผ่าน</b> — ${st.lotCount} ล็อค ต้องหา ${st.target} ร้าน · กรอกครบแล้ว <b>${st.valid}</b> ร้าน · ขาดอีก <b>${remain}</b> ร้าน`;
+  box.style.borderColor = st.pass ? 'var(--ok)' : 'var(--red)';
+  shopLeads.forEach(l => {
+    const el = document.getElementById('shopLeadState-' + l.id);
+    if(el) el.innerHTML = shopLeadRowBadge_(st.rowState[l.id]);
+  });
+}
+function shopLeadRowBadge_(state){
+  if(state === 'ok') return '<span class="auto-badge" style="margin-left:0;">ครบ</span>';
+  if(state === 'duplicate') return '<span class="manual-badge" style="margin-left:0;">เบอร์ซ้ำกับร้านก่อนหน้า — ไม่นับ</span>';
+  if(state === 'incomplete') return '<span class="manual-badge" style="margin-left:0;">ต้องมีชื่อร้าน + เบอร์โทรอย่างน้อย 9 หลัก</span>';
+  return '<span class="manual-badge" style="margin-left:0;">ยังไม่ได้กรอก</span>';
+}
+function updateShopLotCount(){
+  renderShopLeadProgress();
+  scheduleAutosave();
+}
+function addShopLead(){
+  shopLeads.push(makeEmptyShopLead());
+  renderShopLeads();
+  scheduleAutosave();
+}
+function removeShopLead(id){
+  const idx = shopLeads.findIndex(l=>l.id===id);
+  if(idx>-1) shopLeads.splice(idx,1);
+  renderShopLeads();
+  scheduleAutosave();
+}
+function updateShopLeadTyped(id, field, value){
+  const l = shopLeads.find(l=>l.id===id);
+  if(!l) return;
+  l[field] = value;
+  renderShopLeadProgress(); // อัปเดตแค่ตัวนับ ไม่ render ใหม่ทั้งหมด จะได้ไม่หลุดโฟกัสตอนพิมพ์
+  scheduleAutosave();
+}
+function renderShopLeads(){
+  const container = document.getElementById('shopLeadContainer');
+  if(!container) return;
+  container.innerHTML = '';
+  const st = shopLeadStatus();
+  shopLeads.forEach((l, idx) => {
+    const div = document.createElement('div');
+    div.className = 'subcard';
+    div.innerHTML = `
+      <button class="danger small remove-btn" onclick="removeShopLead('${l.id}')">ลบ</button>
+      <div class="subcard-title" style="padding-right:56px;">ร้านที่ ${idx+1}</div>
+      <div id="shopLeadState-${l.id}" style="margin:-4px 0 10px;">${shopLeadRowBadge_(st.rowState[l.id])}</div>
+      <div class="row">
+        <div><label>ชื่อร้าน *</label><input type="text" value="${escAttr_(l.shopName)}" placeholder="เช่น ร้านป้าแดงลูกชิ้นทอด" oninput="updateShopLeadTyped('${l.id}','shopName',this.value)"></div>
+        <div><label>เบอร์โทร *</label><input type="text" inputmode="tel" value="${escAttr_(l.phone)}" placeholder="เช่น 081-234-5678" oninput="updateShopLeadTyped('${l.id}','phone',this.value)"></div>
+      </div>
+      <div class="row" style="margin-bottom:0;">
+        <div><label>ขายอะไร (ถ้ามี)</label><input type="text" value="${escAttr_(l.product)}" placeholder="เช่น อาหาร, เครื่องดื่ม, เสื้อผ้า" oninput="updateShopLeadTyped('${l.id}','product',this.value)"></div>
+        <div><label>หมายเหตุ (ถ้ามี)</label><input type="text" value="${escAttr_(l.notes)}" placeholder="เช่น มาได้แค่ D1–D3" oninput="updateShopLeadTyped('${l.id}','notes',this.value)"></div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+  if(shopLeads.length===0) container.innerHTML = '<div class="hint">ยังไม่มีร้านค้า — กด "+ เพิ่มร้านค้า" แล้วกรอกชื่อร้านกับเบอร์โทรที่ได้จากการสำรวจ</div>';
+  renderShopLeadProgress();
+}
+// ใช้กันปุ่มสร้างสไลด์/เอกสารสรุป — คืนค่า true ถ้าผ่าน
+function requireShopLeadsOrWarn(){
+  const st = shopLeadStatus();
+  if(st.pass) return true;
+  const msg = !st.lotCount
+    ? 'ยังไม่ผ่าน: ยังไม่ได้กรอกจำนวนล็อคเช่าในหัวข้อ 9 Lead ร้านค้า'
+    : `ยังไม่ผ่าน: หัวข้อ 9 Lead ร้านค้า ต้องมี ${st.target} ร้าน (${st.lotCount} ล็อค × 1.5) แต่กรอกครบแล้ว ${st.valid} ร้าน — ขาดอีก ${st.target - st.valid} ร้าน\n\nร้านที่นับ ต้องมีทั้งชื่อร้านและเบอร์โทร และเบอร์ต้องไม่ซ้ำกัน`;
+  alert(msg);
+  document.getElementById('shopLeadContainer').scrollIntoView({behavior:'smooth', block:'center'});
+  return false;
+}
+
 // ---------- Activity layout (floor-plan photo + colored symbol markers + legend) ----------
 const LAYOUT_SYMBOLS = [
   {k:'dot', t:'จุดกลม'}, {k:'star', t:'ดาว'}, {k:'heart', t:'หัวใจ'}, {k:'square', t:'จัตุรัส'}, {k:'rect', t:'ผืนผ้า (ใส่สัดส่วนได้)'}, {k:'triangle', t:'สามเหลี่ยม'}
@@ -2670,6 +2798,7 @@ function renderSignageSummary(){
 
 // ---------- Generate final document ----------
 function generateFinal(){
+  if(!requireShopLeadsOrWarn()) return;
   const branchName = document.getElementById('branchName').value || '(ไม่ระบุชื่อสาขา)';
   const branchCode = document.getElementById('branchCode').value || '-';
   const province = document.getElementById('province').value || '-';
@@ -2750,7 +2879,17 @@ function generateFinal(){
   });
   out += '\n';
 
-  out += `--- 6. กิจกรรมหน้าร้าน ---\n${activityDetail}\n`;
+  {
+    const st = shopLeadStatus();
+    out += `--- 6. Lead ร้านค้า ---\n`;
+    out += `ล็อคเช่า ${st.lotCount} ล็อค | ต้องหา ${st.target} ร้าน | กรอกครบ ${st.valid} ร้าน\n`;
+    shopLeads.filter(l => st.rowState[l.id] === 'ok').forEach((l, i) => {
+      out += `${i+1}. ${l.shopName.trim()} | โทร ${l.phone.trim()}${l.product ? ' | ขาย ' + l.product : ''}${l.notes ? ' | ' + l.notes : ''}\n`;
+    });
+    out += '\n';
+  }
+
+  out += `--- 7. กิจกรรมหน้าร้าน ---\n${activityDetail}\n`;
   if(activityLayout.photo){
     out += `📎 มีรูป Layout แล้ว (${activityLayout.markers.length} จุด)\n`;
     activityLayout.markers.forEach(m => {
@@ -2759,11 +2898,11 @@ function generateFinal(){
   }
   out += '\n';
 
-  out += `--- 7. ขอความช่วยเหลือ ---\n`;
+  out += `--- 8. ขอความช่วยเหลือ ---\n`;
   helpItems.forEach(h => out += `- ${h.name}: ${h.qty}\n`);
   out += '\n';
 
-  out += `--- 8. สรุปสำหรับ MKT + จัดซื้อ ---\n`;
+  out += `--- 9. สรุปสำหรับ MKT + จัดซื้อ ---\n`;
   out += document.getElementById('signageSummaryTable').innerText + '\n';
   out += `Artwork ต้องเสร็จภายใน: ${artworkDeadline?fmtDate(artworkDeadline):'(ยังไม่ระบุ)'}\n`;
   out += `ซัพป้ายที่แนะนำ: ${purchasingContact}\n`;
@@ -2800,6 +2939,7 @@ function importJSON(){
   }
 }
 async function openPackGoSlides(){
+  if(!requireShopLeadsOrWarn()) return; // เช็คก่อนเปิดแท็บใหม่ จะได้ไม่มีแท็บว่างค้าง
   const btn = document.getElementById('pptxBtn');
   const originalLabel = btn.textContent;
   // Open the tab synchronously (inside the click handler) so browsers don't
@@ -2876,7 +3016,8 @@ function collectState(){
     artworkDeadline: document.getElementById('artworkDeadline').value,
     purchasingContact: document.getElementById('purchasingContact').value,
     otherSuppliers: document.getElementById('otherSuppliers').value,
-    signages, helpItems, dayPlans, hotels, parkings, activityLayout
+    shopLotCount: document.getElementById('shopLotCount').value,
+    signages, helpItems, dayPlans, hotels, parkings, shopLeads, activityLayout
   };
 }
 // Google Sheet cells cap out at 50,000 characters — photos (base64) can blow past that
@@ -2986,8 +3127,10 @@ function applyState(s){
   dayPlans = s.dayPlans || [];
   hotels.length=0; (s.hotels||[]).forEach(x=>hotels.push(x));
   parkings.length=0; (s.parkings||[]).forEach(x=>parkings.push(x));
+  document.getElementById('shopLotCount').value = s.shopLotCount||'';
+  shopLeads.length=0; (s.shopLeads||[]).forEach(x=>shopLeads.push(x));
   activityLayout = Object.assign({photo:'', markers:[], slideLayout:'top'}, s.activityLayout||{});
-  renderSignages(); renderHelp(); renderDays(); renderHotels(); renderParkings(); renderActivitySection(); renderAll(); renderSignageSummary();
+  renderSignages(); renderHelp(); renderDays(); renderHotels(); renderParkings(); renderShopLeads(); renderActivitySection(); renderAll(); renderSignageSummary();
 }
 // ---------- Auto-save (fires automatically after any edit, no manual button needed) ----------
 let autosaveTimer = null;
@@ -3549,6 +3692,7 @@ DEFAULT_HELP.forEach(([n,q]) => addHelpItem(n,q));
 rebuildDays();
 renderHotels();
 renderParkings();
+renderShopLeads();
 renderActivitySection();
 renderAll();
 renderSignageSummary();
