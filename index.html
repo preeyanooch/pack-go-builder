@@ -112,6 +112,23 @@
     color:#8a5a00; background:#fff6df; border:1px solid #ffe4a3;
     border-radius:8px; padding:8px 12px;
   }
+
+  /* เช็คอินจุดประชาสัมพันธ์หน้างาน (ใช้บนมือถือเป็นหลัก) */
+  .checkin-section{margin-top:18px; padding-top:14px; border-top:1px dashed var(--line);}
+  .checkin-section h3{margin:0 0 6px; font-size:14.5px;}
+  .checkin-item{display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; background:#fff;}
+  .checkin-item .ci-info{flex:1; min-width:200px; font-size:13.5px;}
+  .checkin-item .ci-meta{font-size:12.5px; color:var(--muted);}
+  .checkin-item button{min-height:44px;}
+  .ci-done{display:inline-block; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:12px; background:var(--ok-bg); color:var(--ok);}
+  .ci-box{border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px; font-size:13.5px; background:#FBFAF8;}
+  .ci-box.ok{background:var(--ok-bg); border-color:#b9e0c6; color:var(--ok);}
+  .ci-box.warn{background:var(--amber-bg); border-color:#f0d9a8; color:#8a5a00;}
+  .ci-box.err{background:#FDECEC; border-color:#F4B6B6; color:#8a1f1f;}
+  .ci-photo-preview{display:block; max-width:100%; max-height:220px; border-radius:8px; margin:0 0 12px; border:1px solid var(--line);}
+  #checkinSubmitBtn{width:100%; min-height:48px; font-size:15px;}
+  #checkinPhotoInput{width:100%; font-size:16px; padding:10px; border:1px dashed var(--line); border-radius:8px; background:#fff;}
+  #checkinOverlay input[type=number], #checkinOverlay input[type=text], #checkinOverlay select{font-size:16px;} /* 16px กัน iPhone ซูมเองตอนแตะช่อง */
 </style>
 </head>
 <body>
@@ -239,6 +256,11 @@
       </div>
     </div>
     <div id="daysContainer"></div>
+    <div class="checkin-section" id="prCheckinSection">
+      <h3>📍 เช็คอินหน้างาน (ทีมที่ออกแจกใบปลิวจริง)</h3>
+      <div class="hint" style="margin-bottom:10px;">ไปถึงจุดแล้วกด "เช็คอินจุดนี้" — ระบบจะจับพิกัด GPS ให้ ถ่ายรูปยืนยัน 1 รูป กรอกจำนวนที่แจกจริง แล้วกดส่ง ข้อมูลจะเข้าชีตสรุปของ HQ ทันที</div>
+      <div id="prCheckinList"></div>
+    </div>
   </div>
 
   <!-- STEP 5: SIGNAGE POINTS -->
@@ -278,7 +300,7 @@
   </div>
 
   <!-- STEP 9: SHOP LEADS -->
-  <div class="step-label"><div class="step-num">9</div><h2>Lead ร้านค้า</h2><span class="note">บังคับ — ต้องหาร้านให้ได้ 1.5 เท่าของจำนวนล็อค</span></div>
+  <div class="step-label"><div class="step-num">9</div><h2>Lead ร้านค้า</h2><span class="note">เป้า — หาร้านให้ได้ 1.5 เท่าของจำนวนล็อค (ไม่ครบระบบจะเตือน แต่ยังทำต่อได้)</span></div>
   <div class="card">
     <div class="row">
       <div><label>จำนวนล็อคเช่าของสาขานี้</label><input type="number" inputmode="numeric" min="1" step="1" id="shopLotCount" placeholder="เช่น 4" oninput="updateShopLotCount(this.value)"></div>
@@ -381,6 +403,37 @@
   </div>
 </div>
 
+<!-- PR Check-in Modal (เช็คอินจุดประชาสัมพันธ์หน้างาน: GPS + รูปยืนยัน + จำนวนแจกจริง) -->
+<div id="checkinOverlay" class="composer-overlay hidden">
+  <div class="composer-box">
+    <div class="composer-header">
+      <h3>📍 เช็คอินจุดประชาสัมพันธ์</h3>
+      <button class="ghost small" type="button" id="checkinCloseBtn" onclick="closePrCheckin()">✕ ปิด</button>
+    </div>
+    <div class="ci-box" id="checkinSummary"></div>
+
+    <label for="checkinPointName">ชื่อจุด</label>
+    <input type="text" id="checkinPointName" maxlength="200" placeholder="ชื่อสถานที่ที่ไปแจก">
+    <label for="checkinPointType">ประเภทจุด</label>
+    <select id="checkinPointType"></select>
+
+    <label>พิกัด GPS ตอนนี้</label>
+    <div class="ci-box" id="checkinGpsStatus">ยังไม่ได้จับพิกัด</div>
+    <button class="ghost" type="button" id="checkinGpsBtn" onclick="captureCheckinGps()" style="margin-bottom:12px; min-height:44px;">📡 จับพิกัดใหม่</button>
+
+    <label for="checkinPhotoInput">รูปยืนยัน (ถ่ายที่จุดนี้)</label>
+    <input type="file" id="checkinPhotoInput" accept="image/*" capture="environment" onchange="onCheckinPhotoPicked(this)" style="margin-bottom:8px;">
+    <div class="hint" id="checkinPhotoStatus" style="margin-bottom:8px;"></div>
+    <img id="checkinPhotoPreview" class="ci-photo-preview hidden" alt="รูปยืนยัน">
+
+    <label for="checkinLeafletActual">แจกจริง (ใบ)</label>
+    <input type="number" id="checkinLeafletActual" inputmode="numeric" min="0" step="1" placeholder="จำนวนใบปลิวที่แจกจริง">
+
+    <div class="ci-box hidden" id="checkinResult"></div>
+    <button type="button" id="checkinSubmitBtn" onclick="sendPrCheckin()">✅ ส่งเช็คอิน</button>
+  </div>
+</div>
+
 <script>
 let BRANCH_MASTER = [];
 // ป้องกันข้อมูลจุดติดป้ายหาย: เก็บสถานะว่า session นี้โหลดสาขาไหนมาแล้วบ้าง (currentLoadedBranchKey)
@@ -469,6 +522,7 @@ function addDays(dateStr, n){
 }
 
 function renderAll(){
+  renderCheckinList(); // รหัสสาขา/วันเปิดเปลี่ยน -> วันที่ของแต่ละ D-x ในรายการเช็คอินเปลี่ยนตาม
   const start = document.getElementById('openStart').value;
   const box = document.getElementById('dateReadout');
   if(!start){
@@ -545,12 +599,12 @@ function rebuildDays(){
   const n = parseInt(document.getElementById('numDays').value);
   dayPlans = [];
   for(let i=n; i>=1; i--){
-    dayPlans.push({label: `D-${i}`, rows: [{timeStart:'', timeEnd:'', detail:'', manpower:'', flyers:'', lat:'', lng:''}]});
+    dayPlans.push({label: `D-${i}`, rows: [{timeStart:'', timeEnd:'', detail:'', pointType:'', manpower:'', flyers:'', lat:'', lng:''}]});
   }
   renderDays();
 }
 function addRow(dayIdx){
-  dayPlans[dayIdx].rows.push({timeStart:'', timeEnd:'', detail:'', manpower:'', flyers:'', lat:'', lng:''});
+  dayPlans[dayIdx].rows.push({timeStart:'', timeEnd:'', detail:'', pointType:'', manpower:'', flyers:'', lat:'', lng:''});
   renderDays();
   scheduleAutosave();
 }
@@ -701,7 +755,7 @@ function renderDays(){
   dayPlans.forEach((day, dayIdx) => {
     const div = document.createElement('div');
     div.className = 'day-block';
-    let html = `<div class="hint" style="margin-bottom:6px;">พิกัด: พิมพ์เองได้เลย หรือวางลิงก์ Google Maps ที่แชร์มาจาก LINE ก็ได้ (รองรับทั้งแบบทศนิยม เช่น 13.357, 99.936 และแบบองศา เช่น 13°21'25.2"N 99°56'12.6"E) ระบบจะแยกพิกัดให้อัตโนมัติ</div><h3>แผนงาน ${day.label}</h3><div style="overflow-x:auto;"><table style="min-width:900px;"><tr><th style="width:270px;">เวลา (เริ่ม–จบ)</th><th>รายละเอียด</th><th style="width:65px;">กำลังคน</th><th style="width:75px;">ใบปลิว</th><th style="width:170px;">พิกัด</th><th style="width:36px;"></th><th style="width:36px;"></th></tr>`;
+    let html = `<div class="hint" style="margin-bottom:6px;">พิกัด: พิมพ์เองได้เลย หรือวางลิงก์ Google Maps ที่แชร์มาจาก LINE ก็ได้ (รองรับทั้งแบบทศนิยม เช่น 13.357, 99.936 และแบบองศา เช่น 13°21'25.2"N 99°56'12.6"E) ระบบจะแยกพิกัดให้อัตโนมัติ</div><h3>แผนงาน ${day.label}</h3><div style="overflow-x:auto;"><table style="min-width:1050px;"><tr><th style="width:270px;">เวลา (เริ่ม–จบ)</th><th>รายละเอียด</th><th style="width:150px;">ประเภทจุด</th><th style="width:65px;">กำลังคน</th><th style="width:75px;">ใบปลิว</th><th style="width:170px;">พิกัด</th><th style="width:36px;"></th><th style="width:36px;"></th></tr>`;
     day.rows.forEach((row, rowIdx) => {
       const tsParts = (row.timeStart||'').split(':');
       const teParts = (row.timeEnd||'').split(':');
@@ -714,6 +768,7 @@ function renderDays(){
           <select style="margin-bottom:0; width:auto;" onchange="updateRowTime(${dayIdx},${rowIdx},'timeEnd','minute',this.value)">${timeMinuteOptions(teParts[1]||'')}</select>
         </div></td>
         <td><input type="text" value="${row.detail}" placeholder="รายละเอียดกิจกรรม" oninput="updateRow(${dayIdx},${rowIdx},'detail',this.value)"></td>
+        <td><select style="margin-bottom:0;" onchange="updateRow(${dayIdx},${rowIdx},'pointType',this.value)">${pointTypeOptionsHtml_(row.pointType)}</select></td>
         <td><input type="text" value="${row.manpower}" placeholder="4" oninput="updateRow(${dayIdx},${rowIdx},'manpower',this.value)"></td>
         <td><input type="number" min="0" value="${row.flyers}" placeholder="50" oninput="updateRow(${dayIdx},${rowIdx},'flyers',this.value)"></td>
         <td><input type="text" value="${rowCoordsDisplay(row)}" placeholder="13.670992, 99.879163" oninput="updateRowCoords(${dayIdx},${rowIdx},this.value)" onblur="renderDays()" onpaste="handleRowCoordsPaste(event,${dayIdx},${rowIdx})"></td>
@@ -725,6 +780,293 @@ function renderDays(){
     div.innerHTML = html;
     container.appendChild(div);
   });
+  renderCheckinList(); // รายการเช็คอินหน้างานอ่านจากแผนรายวันนี้ — วาดใหม่ตามทุกครั้ง
+}
+
+// ==================== เช็คอินจุดประชาสัมพันธ์หน้างาน (PR Check-in) ====================
+// ทีมหน้างานเปิดสาขาที่วางแผนไว้ -> กด "เช็คอินจุดนี้" ที่แต่ละแถวของแผนรายวัน -> จับ GPS + ถ่ายรูป + กรอกจำนวนแจกจริง
+// -> ส่งไป Apps Script (submitPrCheckin) ผ่านช่องทางเดิม (gsRunNoRetry แนบ token เหมือนคำสั่งอื่น) ได้ 1 แถวในชีตสรุปของ HQ
+// - ไม่ retry อัตโนมัติ (บทเรียนจากสร้างสไลด์ซ้ำ) แต่ทุกการเช็คอินมีรหัส checkinId ของตัวเอง กดส่งซ้ำด้วยรหัสเดิม
+//   เซิร์ฟเวอร์จะไม่เขียนแถวซ้ำ จึงกด "ส่งอีกครั้ง" ได้ปลอดภัยเวลาเน็ตหลุด
+// - หน้าต่างเช็คอินไม่แตะข้อมูลแผน (dayPlans) เลย จึงไม่ไปกระตุ้น autosave ทับ draft ของสาขา
+// - ประเภทจุด (pointType) เก็บไว้ที่แถวแผน (คนวางแผนเลือกไว้ล่วงหน้า) และแก้ได้ตอนเช็คอินถ้าหน้างานไม่ตรง
+const PR_POINT_TYPES = ['สถานศึกษา', 'หน่วยงานราชการ', 'สถานพยาบาล', 'ตลาด', 'ร้านค้า', 'ชุมชน', 'กลุ่มที่อยู่อาศัย', 'หน้าสาขา', 'ถนนสายหลัก', 'อื่นๆ'];
+const CHECKIN_DONE_KEY = 'pgbCheckinDone';       // จุดที่เช็คอินสำเร็จจากเครื่องนี้ (โชว์ป้าย "เช็คอินแล้ว" เท่านั้น ไม่ใช่ข้อมูลจริง)
+const CHECKIN_PENDING_KEY = 'pgbCheckinPending'; // รหัสเช็คอินที่กดส่งแล้วแต่ยังไม่รู้ผล (เน็ตหลุด) — เปิดจุดเดิมใหม่จะใช้รหัสเดิม
+const CHECKIN_DONE_MAX = 300;
+let prCheckin = null; // สถานะหน้าต่างเช็คอินที่เปิดอยู่ (null = ปิดอยู่)
+
+function pointTypeOptionsHtml_(selected){
+  const sel = selected || '';
+  let html = '<option value="">- เลือกประเภทจุด -</option>';
+  // ค่าที่บันทึกไว้แต่ไม่อยู่ในรายการ (เช่น รายการเปลี่ยนภายหลัง) ยังต้องโชว์อยู่ ไม่ให้หายเงียบ ๆ
+  const list = (sel && PR_POINT_TYPES.indexOf(sel) === -1) ? PR_POINT_TYPES.concat([sel]) : PR_POINT_TYPES;
+  list.forEach(t => { html += `<option value="${escAttr_(t)}" ${t === sel ? 'selected' : ''}>${escAttr_(t)}</option>`; });
+  return html;
+}
+function readCheckinStore_(key){
+  try{ return JSON.parse(localStorage.getItem(key) || '{}') || {}; }catch(e){ return {}; }
+}
+function writeCheckinStore_(key, obj){
+  try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(e){ /* โหมดส่วนตัว/พื้นที่เต็ม — ไม่กระทบการส่งจริง */ }
+}
+function checkinStoreCode_(){
+  const v = (document.getElementById('branchCode').value || '').trim();
+  return (v && v !== 'ไม่มีรหัส') ? v : '';
+}
+// วันที่ของ D-x นับจากวันเปิดสาขา (วันแรก) ใน Step 1 เช่น D-2 = วันเปิด ลบ 2 วัน
+function checkinEventDate_(label){
+  const start = document.getElementById('openStart').value;
+  const m = /^D-(\d+)$/i.exec(String(label || '').trim());
+  return (start && m) ? addDays(start, -parseInt(m[1], 10)) : '';
+}
+function checkinPlanRowHasContent_(r){
+  return !!(r && (r.timeStart || r.timeEnd || String(r.detail || '').trim()));
+}
+function checkinPointKey_(storeCode, day, row){
+  return [storeCode, day.label, rowTimeDisplay(row), String(row.detail || '').trim()].join('|');
+}
+function checkinLeafletTarget_(row){
+  const v = String(row.flyers == null ? '' : row.flyers).trim();
+  return /^\d+$/.test(v) ? Number(v) : '';
+}
+function checkinHaversineM_(lat1, lng1, lat2, lng2){
+  const R = 6371000, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+function newCheckinId_(){
+  try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+  return 'ci' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+}
+
+function renderCheckinList(){
+  const box = document.getElementById('prCheckinList');
+  if(!box) return;
+  const storeCode = checkinStoreCode_();
+  const start = document.getElementById('openStart').value;
+  const missing = [];
+  if(!storeCode) missing.push('รหัสสาขา');
+  if(!start) missing.push('วันเปิดสาขา');
+  if(missing.length){
+    box.innerHTML = `<div class="hint">ต้องมี${missing.join(' และ ')}ใน Step 1 ก่อนถึงจะเช็คอินได้ — ถ้าเป็นสาขาที่วางแผนไว้แล้ว กดชื่อสาขาด้านบนสุดเพื่อโหลดข้อมูลก่อน</div>`;
+    return;
+  }
+  const done = readCheckinStore_(CHECKIN_DONE_KEY);
+  let html = '', count = 0;
+  dayPlans.forEach((day, dayIdx) => {
+    (day.rows || []).forEach((row, rowIdx) => {
+      if(!checkinPlanRowHasContent_(row)) return;
+      count++;
+      const d = done[checkinPointKey_(storeCode, day, row)];
+      const date = checkinEventDate_(day.label);
+      const target = rowFlyersDisplay(row);
+      html += `<div class="checkin-item">
+        <div class="ci-info"><b>${escAttr_(day.label)}</b> · ${escAttr_(date ? fmtDate(date) : '-')} · ${escAttr_(rowTimeDisplay(row) || '-')}<br>
+          ${escAttr_(String(row.detail || '').trim() || '(ไม่มีรายละเอียด)')}
+          <div class="ci-meta">${escAttr_(row.pointType || 'ยังไม่ระบุประเภทจุด')} · เป้า ${escAttr_(target || '-')}${(row.lat && row.lng) ? '' : ' · แผนไม่มีพิกัด'}</div>
+          ${d ? `<span class="ci-done">✅ เช็คอินจากเครื่องนี้แล้ว ${escAttr_(d.at || '')}</span>` : ''}
+        </div>
+        <button type="button" class="${d ? 'ghost' : ''}" onclick="openPrCheckin(${dayIdx},${rowIdx})">${d ? 'เช็คอินซ้ำ' : '📍 เช็คอินจุดนี้'}</button>
+      </div>`;
+    });
+  });
+  box.innerHTML = count ? html : '<div class="hint">ยังไม่มีจุดในแผนรายวันด้านบน — เพิ่มแถวในตารางก่อน</div>';
+}
+
+function openPrCheckin(dayIdx, rowIdx){
+  if(restoringSessionCount > 0){ alert('กำลังโหลดข้อมูลสาขาอยู่ รอให้โหลดเสร็จก่อนค่อยเช็คอินนะคะ'); return; }
+  const day = dayPlans[dayIdx];
+  const row = day && day.rows && day.rows[rowIdx];
+  if(!row) return;
+  const storeCode = checkinStoreCode_();
+  const date = checkinEventDate_(day.label);
+  if(!storeCode || !date){ alert('ต้องมีรหัสสาขาและวันเปิดสาขาใน Step 1 ก่อนค่ะ'); return; }
+  const key = checkinPointKey_(storeCode, day, row);
+  const done = readCheckinStore_(CHECKIN_DONE_KEY)[key];
+  if(done && !confirm(`จุดนี้เช็คอินจากเครื่องนี้ไปแล้วเมื่อ ${done.at || '-'}\nต้องการเช็คอินซ้ำใช่ไหม? (จะได้อีก 1 แถวในชีต)`)) return;
+  const pending = readCheckinStore_(CHECKIN_PENDING_KEY);
+  // เก็บค่าจากแผน ณ ตอนเปิดหน้าต่างไว้ (snapshot) — ถ้ามีใครแก้แผนระหว่างนี้ ข้อมูลที่ส่งก็ยังตรงกับที่เห็นบนหน้าต่าง
+  prCheckin = {
+    key,
+    checkinId: pending[key] || newCheckinId_(), // ครั้งก่อนกดส่งแล้วไม่รู้ผล -> ใช้รหัสเดิม กันแถวซ้ำ
+    storeCode,
+    eventDay: day.label,
+    date,
+    plannedTime: rowTimeDisplay(row),
+    leafletTarget: checkinLeafletTarget_(row),
+    planLat: row.lat || '', planLng: row.lng || '',
+    lat: null, lng: null, accuracy: null, gpsTime: null,
+    photo: '', sending: false, done: false
+  };
+  document.getElementById('checkinSummary').innerHTML =
+    `<b>${escAttr_(storeCode)}</b> · ${escAttr_(day.label)} (${escAttr_(fmtDate(date))})<br>` +
+    `เวลาแผน ${escAttr_(prCheckin.plannedTime || '-')} · เป้าใบปลิว ${escAttr_(prCheckin.leafletTarget === '' ? '-' : prCheckin.leafletTarget + ' ใบ')}` +
+    (pending[key] ? '<br><span style="color:#8a5a00;">ครั้งก่อนส่งจุดนี้ไม่สำเร็จ/ไม่รู้ผล — ส่งใหม่ได้เลย ระบบไม่บันทึกซ้ำ</span>' : '');
+  document.getElementById('checkinPointName').value = String(row.detail || '').trim();
+  document.getElementById('checkinPointType').innerHTML = pointTypeOptionsHtml_(row.pointType);
+  const photoInput = document.getElementById('checkinPhotoInput');
+  photoInput.value = ''; photoInput.disabled = false;
+  document.getElementById('checkinPhotoStatus').textContent = 'กดเพื่อเปิดกล้องแล้วถ่ายรูปที่จุดนี้';
+  const preview = document.getElementById('checkinPhotoPreview');
+  preview.removeAttribute('src'); preview.classList.add('hidden');
+  document.getElementById('checkinLeafletActual').value = '';
+  document.getElementById('checkinResult').classList.add('hidden');
+  const btn = document.getElementById('checkinSubmitBtn');
+  btn.disabled = false; btn.textContent = '✅ ส่งเช็คอิน';
+  document.getElementById('checkinGpsBtn').disabled = false;
+  document.getElementById('checkinCloseBtn').disabled = false;
+  document.getElementById('checkinOverlay').classList.remove('hidden');
+  captureCheckinGps();
+}
+
+function closePrCheckin(){
+  if(prCheckin && prCheckin.sending) return; // กำลังส่งอยู่ ห้ามปิดกลางทาง
+  if(prCheckin && !prCheckin.done && (prCheckin.photo || document.getElementById('checkinLeafletActual').value)
+     && !confirm('ยังไม่ได้ส่งเช็คอิน — ปิดแล้วรูปและตัวเลขที่กรอกจะหาย ปิดเลยไหม?')) return;
+  prCheckin = null;
+  const preview = document.getElementById('checkinPhotoPreview');
+  preview.removeAttribute('src'); preview.classList.add('hidden');
+  document.getElementById('checkinOverlay').classList.add('hidden');
+}
+
+function checkinGeoErrorText_(err){
+  if(err && err.code === 1) return 'ไม่ได้อนุญาตให้เข้าถึงตำแหน่ง — เปิดสิทธิ์ Location ให้เบราว์เซอร์ แล้วกด "จับพิกัดใหม่"';
+  if(err && err.code === 2) return 'หาตำแหน่งไม่ได้ (สัญญาณ GPS อ่อน) ลองออกไปที่โล่งแล้วกด "จับพิกัดใหม่"';
+  if(err && err.code === 3) return 'รอ GPS นานเกินไป ลองกด "จับพิกัดใหม่" อีกครั้ง';
+  return (err && err.message) || 'ไม่ทราบสาเหตุ';
+}
+function renderCheckinGpsStatus_(){
+  const st = document.getElementById('checkinGpsStatus');
+  const c = prCheckin;
+  if(!c || c.lat == null){ st.className = 'ci-box'; st.textContent = 'ยังไม่ได้จับพิกัด'; return; }
+  const good = c.accuracy != null && c.accuracy <= 50;
+  let html = `${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}<br>ความแม่นยำ ±${c.accuracy != null ? c.accuracy : '?'} ม.`;
+  const pLat = parseFloat(c.planLat), pLng = parseFloat(c.planLng);
+  if(!isNaN(pLat) && !isNaN(pLng)) html += ` · ห่างจากพิกัดในแผน ~${Math.round(checkinHaversineM_(pLat, pLng, c.lat, c.lng)).toLocaleString('th-TH')} ม.`;
+  else html += ' · แผนไม่มีพิกัด (ช่องระยะห่างในชีตจะเว้นว่าง)';
+  if(!good) html += '<br>ความแม่นยำค่อนข้างต่ำ — ถ้าทำได้ ออกไปที่โล่งแล้วกด "จับพิกัดใหม่" (ส่งแบบนี้ก็ได้)';
+  st.className = 'ci-box ' + (good ? 'ok' : 'warn');
+  st.innerHTML = html;
+}
+function captureCheckinGps(){
+  const c = prCheckin;
+  if(!c || c.sending || c.done) return;
+  const st = document.getElementById('checkinGpsStatus');
+  if(!navigator.geolocation){ st.className = 'ci-box err'; st.textContent = 'เบราว์เซอร์นี้ไม่รองรับ GPS'; return; }
+  st.className = 'ci-box';
+  st.innerHTML = '<span class="pgb-spinner"></span>กำลังจับพิกัด... (ยืนที่โล่งจะเร็วและแม่นกว่า)';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      if(prCheckin !== c || c.sending || c.done) return; // หน้าต่างถูกปิด/เปิดจุดอื่นไปแล้ว
+      c.lat = pos.coords.latitude;
+      c.lng = pos.coords.longitude;
+      c.accuracy = Math.round(pos.coords.accuracy);
+      c.gpsTime = pos.timestamp || Date.now();
+      renderCheckinGpsStatus_();
+    },
+    (err) => {
+      if(prCheckin !== c) return;
+      if(c.lat != null){ renderCheckinGpsStatus_(); alert('จับพิกัดใหม่ไม่สำเร็จ ยังใช้พิกัดเดิมอยู่: ' + checkinGeoErrorText_(err)); return; }
+      st.className = 'ci-box err';
+      st.textContent = 'จับพิกัดไม่สำเร็จ: ' + checkinGeoErrorText_(err);
+    },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+  );
+}
+
+async function onCheckinPhotoPicked(input){
+  const c = prCheckin;
+  const file = input.files && input.files[0];
+  if(!c || !file) return;
+  const st = document.getElementById('checkinPhotoStatus');
+  const preview = document.getElementById('checkinPhotoPreview');
+  st.textContent = 'กำลังย่อรูป...';
+  try{
+    // ใช้ตัวย่อรูปเดิมของแอป — 1280px คุณภาพ 0.7 พอให้ดูหน้างานออก และส่งผ่านเน็ตมือถือไหว (ปกติไม่กี่ร้อย KB)
+    const dataUrl = await compressImage(file, 1280, 0.7);
+    if(prCheckin !== c) return;
+    c.photo = dataUrl;
+    preview.src = dataUrl;
+    preview.classList.remove('hidden');
+    st.textContent = `✅ รูปพร้อมส่ง (ประมาณ ${Math.round(dataUrl.length * 0.75 / 1024)} KB) — ถ่ายใหม่ได้ถ้าไม่ชัด`;
+  }catch(e){
+    if(prCheckin !== c) return;
+    c.photo = '';
+    preview.removeAttribute('src'); preview.classList.add('hidden');
+    st.textContent = '❌ อ่านรูปไม่สำเร็จ ลองถ่ายใหม่อีกครั้ง';
+  }
+}
+
+async function sendPrCheckin(){
+  const c = prCheckin;
+  if(!c || c.sending) return;
+  if(c.done){ closePrCheckin(); return; }
+  const resBox = document.getElementById('checkinResult');
+  const btn = document.getElementById('checkinSubmitBtn');
+  const pointName = document.getElementById('checkinPointName').value.trim();
+  const pointType = document.getElementById('checkinPointType').value;
+  const actualRaw = document.getElementById('checkinLeafletActual').value.trim();
+  const problems = [];
+  if(!pointName) problems.push('ชื่อจุด');
+  if(!pointType) problems.push('ประเภทจุด');
+  if(c.lat == null) problems.push('พิกัด GPS (กด "จับพิกัดใหม่")');
+  if(!c.photo) problems.push('รูปยืนยัน');
+  if(!/^\d+$/.test(actualRaw)) problems.push('จำนวนแจกจริง (ตัวเลขจำนวนเต็ม)');
+  if(problems.length){
+    resBox.className = 'ci-box err';
+    resBox.textContent = 'ยังขาด: ' + problems.join(', ');
+    return;
+  }
+  const payload = {
+    checkinId: c.checkinId, storeCode: c.storeCode, eventDay: c.eventDay, date: c.date,
+    pointName, pointType, plannedTime: c.plannedTime, leafletTarget: c.leafletTarget,
+    lat: c.lat, lng: c.lng, gpsTime: c.gpsTime, planLat: c.planLat, planLng: c.planLng,
+    leafletActual: Number(actualRaw), photo: c.photo
+  };
+  // จดรหัสไว้ก่อนส่ง — ถ้าเน็ตหลุดแล้วปิดหน้าต่าง/รีเฟรช เปิดจุดนี้ใหม่จะได้รหัสเดิม เซิร์ฟเวอร์จะไม่บันทึกซ้ำ
+  const pending = readCheckinStore_(CHECKIN_PENDING_KEY);
+  pending[c.key] = c.checkinId;
+  writeCheckinStore_(CHECKIN_PENDING_KEY, pending);
+
+  c.sending = true;
+  btn.disabled = true;
+  btn.textContent = '⏳ กำลังส่ง... อย่าปิดหน้านี้';
+  document.getElementById('checkinCloseBtn').disabled = true;
+  document.getElementById('checkinGpsBtn').disabled = true;
+  document.getElementById('checkinPhotoInput').disabled = true;
+  resBox.className = 'ci-box';
+  resBox.innerHTML = '<span class="pgb-spinner"></span>กำลังส่งข้อมูลและรูป (เน็ตมือถืออาจใช้ 5–20 วินาที)';
+  try{
+    // ยิงครั้งเดียว ไม่ retry อัตโนมัติ — ถ้าพลาดให้คนกด "ส่งอีกครั้ง" เอง (รหัสเดิม ไม่เกิดแถวซ้ำ)
+    const result = await gsRunNoRetry('submitPrCheckin', JSON.stringify(payload));
+    c.done = true;
+    const done = readCheckinStore_(CHECKIN_DONE_KEY);
+    done[c.key] = { at: (result && result.checkinDatetime) || new Date().toLocaleString('th-TH'), row: result && result.row, id: c.checkinId };
+    const keys = Object.keys(done);
+    if(keys.length > CHECKIN_DONE_MAX) keys.slice(0, keys.length - CHECKIN_DONE_MAX).forEach(k => { delete done[k]; });
+    writeCheckinStore_(CHECKIN_DONE_KEY, done);
+    const p2 = readCheckinStore_(CHECKIN_PENDING_KEY);
+    delete p2[c.key];
+    writeCheckinStore_(CHECKIN_PENDING_KEY, p2);
+    resBox.className = 'ci-box ok';
+    resBox.textContent = (result && result.duplicate)
+      ? '✅ จุดนี้ถูกบันทึกไว้แล้วตั้งแต่ครั้งก่อน (ระบบไม่บันทึกซ้ำ)'
+      : `✅ บันทึกเช็คอินแล้ว${result && result.row ? ' (แถวที่ ' + result.row + ' ในชีต)' : ''}`;
+    btn.textContent = 'ปิดหน้าต่าง';
+    renderCheckinList();
+  }catch(e){
+    resBox.className = 'ci-box err';
+    resBox.innerHTML = `❌ ส่งไม่สำเร็จ: ${escAttr_(e.message)}<br>ข้อมูลที่กรอกยังอยู่ครบ — เช็คสัญญาณเน็ตแล้วกด "ส่งอีกครั้ง" ได้เลย ถ้าครั้งก่อนเข้าไปแล้วจริง ระบบจะไม่บันทึกซ้ำ`;
+    btn.textContent = '🔁 ส่งอีกครั้ง';
+  }finally{
+    c.sending = false;
+    btn.disabled = false;
+    document.getElementById('checkinCloseBtn').disabled = false;
+    document.getElementById('checkinGpsBtn').disabled = c.done;
+    document.getElementById('checkinPhotoInput').disabled = c.done;
+  }
 }
 
 // ---------- Signage points ----------
@@ -2321,7 +2663,7 @@ function renderParkings(){
   if(parkings.length===0) container.innerHTML = '<div class="hint">ยังไม่มีที่จอดรถ — กด "+ เพิ่มที่จอดรถ" ถ้ามีให้กรอก (ไม่บังคับ)</div>';
 }
 
-// ---------- Shop leads (บังคับ: หาร้านให้ได้ 1.5 เท่าของจำนวนล็อคเช่า เพื่อให้ล็อคเต็มตลอด 5 วันงาน) ----------
+// ---------- Shop leads (เป้า ไม่บังคับ: หาร้านให้ได้ 1.5 เท่าของจำนวนล็อคเช่า เพื่อให้ล็อคเต็มตลอด 5 วันงาน) ----------
 const SHOP_LEAD_MULTIPLIER = 1.5;
 function escAttr_(v){
   return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -2425,14 +2767,14 @@ function renderShopLeads(){
   if(shopLeads.length===0) container.innerHTML = '<div class="hint">ยังไม่มีร้านค้า — กด "+ เพิ่มร้านค้า" แล้วกรอกชื่อร้านกับเบอร์โทรที่ได้จากการสำรวจ</div>';
   renderShopLeadProgress();
 }
-// ใช้กันปุ่มสร้างสไลด์/เอกสารสรุป — คืนค่า true ถ้าผ่าน
+// เตือนก่อนสร้างสไลด์/เอกสารสรุป — ร้านยังไม่ครบก็ไปต่อได้ ถ้าผู้ใช้กดยืนยัน (คืนค่า true = ไปต่อ)
 function requireShopLeadsOrWarn(){
   const st = shopLeadStatus();
   if(st.pass) return true;
   const msg = !st.lotCount
-    ? 'ยังไม่ผ่าน: ยังไม่ได้กรอกจำนวนล็อคเช่าในหัวข้อ 9 Lead ร้านค้า'
-    : `ยังไม่ผ่าน: หัวข้อ 9 Lead ร้านค้า ต้องมี ${st.target} ร้าน (${st.lotCount} ล็อค × 1.5) แต่กรอกครบแล้ว ${st.valid} ร้าน — ขาดอีก ${st.target - st.valid} ร้าน\n\nร้านที่นับ ต้องมีทั้งชื่อร้านและเบอร์โทร และเบอร์ต้องไม่ซ้ำกัน`;
-  alert(msg);
+    ? '⚠️ ยังไม่ได้กรอกจำนวนล็อคเช่าในหัวข้อ 9 Lead ร้านค้า'
+    : `⚠️ หัวข้อ 9 Lead ร้านค้า ยังไม่ครบเป้า: ต้องมี ${st.target} ร้าน (${st.lotCount} ล็อค × 1.5) กรอกครบแล้ว ${st.valid} ร้าน — ขาดอีก ${st.target - st.valid} ร้าน\n\nร้านที่นับ ต้องมีทั้งชื่อร้านและเบอร์โทร และเบอร์ต้องไม่ซ้ำกัน`;
+  if(confirm(msg + '\n\nกด "ตกลง" เพื่อทำต่อทั้งที่ยังไม่ครบ หรือ "ยกเลิก" เพื่อกลับไปกรอกร้านเพิ่ม')) return true;
   document.getElementById('shopLeadContainer').scrollIntoView({behavior:'smooth', block:'center'});
   return false;
 }
@@ -2882,7 +3224,7 @@ function generateFinal(){
   {
     const st = shopLeadStatus();
     out += `--- 6. Lead ร้านค้า ---\n`;
-    out += `ล็อคเช่า ${st.lotCount} ล็อค | ต้องหา ${st.target} ร้าน | กรอกครบ ${st.valid} ร้าน\n`;
+    out += `ล็อคเช่า ${st.lotCount} ล็อค | ต้องหา ${st.target} ร้าน | กรอกครบ ${st.valid} ร้าน${st.pass ? '' : ' | ⚠️ ยังไม่ครบเป้า'}\n`;
     shopLeads.filter(l => st.rowState[l.id] === 'ok').forEach((l, i) => {
       out += `${i+1}. ${l.shopName.trim()} | โทร ${l.phone.trim()}${l.product ? ' | ขาย ' + l.product : ''}${l.notes ? ' | ' + l.notes : ''}\n`;
     });
@@ -2967,7 +3309,8 @@ async function openPackGoSlides(){
     const jsonStr = JSON.stringify(state);
     const result = await gsRunNoRetry('createPackGoSlides', jsonStr);
     if(newTab) newTab.location = result.url;
-    else window.open(result.url, '_blank');
+    // แท็บถูกบล็อก (เช่น Safari หลังกดยืนยันในกล่องเตือน Lead ร้านค้า) -> บอกลิงก์ให้เปิดเอง ไม่ให้สไลด์หายเงียบ
+    else if(!window.open(result.url, '_blank')) alert('สร้างสไลด์เสร็จแล้ว แต่เบราว์เซอร์บล็อกการเปิดแท็บใหม่\n\nเปิดลิงก์นี้เอง:\n' + result.url);
   }catch(e){
     if(newTab) newTab.close();
     alert('สร้างสไลด์ไม่สำเร็จ: ' + e.message + '\n\nถ้าเน็ตสะดุดตอนรอ สไลด์อาจสร้างสำเร็จไปแล้วจริง ๆ — ลองเช็ค Google Drive (ล่าสุด) ก่อนกดสร้างซ้ำ เพื่อกันไฟล์ซ้ำ');

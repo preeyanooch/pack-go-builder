@@ -30,8 +30,9 @@ function doPost(e) {
     // ข้อมูลสาขา/รูป/การเข้าสู่ระบบย้ายไป Supabase (ผ่าน proxy บน Vercel) หมดแล้ว — ที่นี่เหลือแค่
     // งานที่ต้องใช้ Google จริง ๆ: สร้างสไลด์ + รายชื่อสาขากลาง ฟังก์ชันเก่าที่เหลือในไฟล์เรียกจากภายนอกไม่ได้แล้ว
     // (ปิดไว้กันคนที่รู้ลิงก์ /exec ยิงตรงมาอ่าน/เขียน/ลบข้อมูลในชีตเก่า)
+    // submitPrCheckin = เช็คอินจุดประชาสัมพันธ์หน้างาน (เขียนแถวลงชีต PR Check-in + เก็บรูปใน Drive)
     const whitelist = {
-      getBranchMasterData, createPackGoSlides
+      getBranchMasterData, createPackGoSlides, submitPrCheckin
     };
     const fn = whitelist[fnName];
     if (!fn) throw new Error('ไม่รู้จักคำสั่ง: ' + fnName);
@@ -284,6 +285,210 @@ function saveDraft(name, jsonStr, savedBy) {
   sheet.appendRow([name, jsonStr, new Date(), savedBy || '']);
   return true;
 }
+
+// ================= PR check-in (เช็คอินจุดประชาสัมพันธ์หน้างาน) =================
+// ทีมหน้างานกด "เช็คอิน" ที่จุดแจกใบปลิวแต่ละจุดในแผนรายวัน (Step 4) -> ส่งพิกัด GPS + รูปยืนยัน + จำนวนที่แจกจริง
+// มาที่นี่ 1 ครั้ง = 1 แถวในชีต "PR Check-in" ให้ HQ เอาไปสรุป/วิเคราะห์ต่อ
+// - ชีตและโฟลเดอร์รูปสร้างเองอัตโนมัติครั้งแรกที่ใช้ เก็บ ID ไว้ใน Script Properties
+//   (CHECKIN_SHEET_ID, CHECKIN_PHOTO_FOLDER_ID) แยกจากชีต draft เดิม (SHEET_ID)
+// - กันแถวซ้ำ: หน้าเว็บสร้างรหัสเช็คอิน (checkinId) ให้ทุกครั้ง ถ้าเน็ตหลุดแล้วกดส่งซ้ำด้วยรหัสเดิม
+//   ที่นี่จะไม่เขียนแถวใหม่ แค่ตอบกลับว่าบันทึกไปแล้ว — รหัสเก็บในชีตซ่อน "_checkin_ids" แยกต่างหาก
+//   เพื่อให้คอลัมน์ในชีตหลักตรงตามแบบ (จบที่ leaflet_pct) ไม่มีคอลัมน์เกิน
+// - สิทธิ์: ชีตและโฟลเดอร์รูปไม่ได้แชร์ให้ใครอัตโนมัติ (เห็นเฉพาะเจ้าของสคริปต์) ถ้าจะให้ HQ เปิดดู
+//   ให้กดแชร์ชีต/โฟลเดอร์เองใน Drive กับคนหรือกลุ่มที่เกี่ยวข้อง รูปในโฟลเดอร์จะได้สิทธิ์ตามโฟลเดอร์เอง
+const CHECKIN_SHEET_NAME_ = 'PR Check-in';
+const CHECKIN_ID_SHEET_NAME_ = '_checkin_ids';
+const CHECKIN_HEADER_KEYS_ = ['store_code', 'event_day', 'date', 'point_name', 'zone_code', 'planned_time', 'leaflet_target',
+  'checkin_datetime', 'checkin_lat', 'checkin_long', 'distance_from_plan_m', 'photo_link', 'leaflet_actual', 'leaflet_pct'];
+const CHECKIN_HEADER_TH_ = ['รหัสสาขา', 'วัน event', 'วันที่', 'ชื่อจุด', 'ประเภทจุด', 'เวลาแผน', 'เป้าใบปลิว',
+  'เวลาเช็คอินจริง', 'lat จริง', 'long จริง', 'ห่างจากแผน (ม.)', 'ลิงก์รูปยืนยัน', 'แจกจริง', '% แจกครบ'];
+// ฟอร์แมตต่อคอลัมน์ (เรียงตามหัวตารางด้านบน) — '@' = ข้อความล้วน กัน Sheets แปลงค่าเอง/ตีความเป็นสูตร
+const CHECKIN_COL_FORMATS_ = ['@', '@', '@', '@', '@', '@', '0', '@', '0.000000', '0.000000', '0', '@', '0', '0%'];
+const CHECKIN_TZ_ = 'Asia/Bangkok';
+const CHECKIN_MAX_PHOTO_BYTES_ = 5 * 1024 * 1024;
+
+function getCheckinSpreadsheet_() {
+  const props = PropertiesService.getScriptProperties();
+  const ssId = props.getProperty('CHECKIN_SHEET_ID');
+  if (ssId) {
+    try { return SpreadsheetApp.openById(ssId); } catch (e) { /* ID เดิมใช้ไม่ได้แล้ว (ถูกลบ/ไม่มีสิทธิ์) — สร้างใหม่ด้านล่าง */ }
+  }
+  const ss = SpreadsheetApp.create('CJX PackGO — PR Check-in (do not rename/delete)');
+  ss.setSpreadsheetTimeZone(CHECKIN_TZ_);
+  props.setProperty('CHECKIN_SHEET_ID', ss.getId());
+  return ss;
+}
+
+function setupCheckinSheet_(sheet) {
+  const n = CHECKIN_HEADER_KEYS_.length;
+  const header = sheet.getRange(1, 1, 2, n);
+  header.setNumberFormat('@');
+  header.setValues([CHECKIN_HEADER_KEYS_, CHECKIN_HEADER_TH_]);
+  header.setBackground('#002060').setFontColor('#FFFFFF').setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true);
+  sheet.getRange(2, 1, 1, n).setBackground('#1F3A75'); // แถวภาษาไทยสีอ่อนกว่าแถวคีย์นิดนึง
+  sheet.setFrozenRows(2);
+  // ลบคอลัมน์ที่เกินจากหัวตาราง ให้ชีตจบที่ leaflet_pct ตามแบบ
+  if (sheet.getMaxColumns() > n) sheet.deleteColumns(n + 1, sheet.getMaxColumns() - n);
+  sheet.setColumnWidths(1, n, 110);
+  sheet.setColumnWidth(4, 220); // ชื่อจุด
+  sheet.setColumnWidth(12, 260); // ลิงก์รูป
+}
+
+function getCheckinSheet_(ss) {
+  let sheet = ss.getSheetByName(CHECKIN_SHEET_NAME_);
+  if (!sheet) {
+    // ชีตที่เพิ่งสร้างมีแผ่นว่างแผ่นแรกอยู่แล้ว (Sheet1) — ใช้แผ่นนั้นถ้ายังว่าง ไม่งั้นแทรกแผ่นใหม่
+    const first = ss.getSheets()[0];
+    if (first && first.getLastRow() === 0 && first.getName() !== CHECKIN_ID_SHEET_NAME_) {
+      sheet = first;
+      sheet.setName(CHECKIN_SHEET_NAME_);
+    } else {
+      sheet = ss.insertSheet(CHECKIN_SHEET_NAME_, 0);
+    }
+    setupCheckinSheet_(sheet);
+  }
+  return sheet;
+}
+
+function getCheckinIdSheet_(ss) {
+  let sheet = ss.getSheetByName(CHECKIN_ID_SHEET_NAME_);
+  if (!sheet) {
+    sheet = ss.insertSheet(CHECKIN_ID_SHEET_NAME_);
+    sheet.getRange('A:D').setNumberFormat('@');
+    sheet.getRange(1, 1, 1, 4).setValues([['checkin_id', 'row', 'saved_at', 'photo_link']]);
+    sheet.setFrozenRows(1);
+    sheet.hideSheet();
+  }
+  return sheet;
+}
+
+function getCheckinPhotoFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const folderId = props.getProperty('CHECKIN_PHOTO_FOLDER_ID');
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch (e) { /* โฟลเดอร์เดิมหาย — สร้างใหม่ */ }
+  }
+  // ตั้งใจไม่เรียก setSharing — รูปมีพิกัดและอาจมีหน้าคน จึงเริ่มจาก "เจ้าของเห็นคนเดียว" ไว้ก่อน
+  const folder = DriveApp.createFolder('CJX PackGO — รูปเช็คอิน PR');
+  props.setProperty('CHECKIN_PHOTO_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+// ระยะห่างบนผิวโลกระหว่าง 2 พิกัด (สูตร haversine) หน่วยเมตร
+function haversineMeters_(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = function (d) { return d * Math.PI / 180; };
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+function checkinText_(v, maxLen) {
+  return String(v == null ? '' : v).replace(/[\r\n\t]+/g, ' ').trim().slice(0, maxLen);
+}
+
+// ข้อความที่ขึ้นต้นด้วย = + - @ จะถูก Sheets ตีความเป็นสูตรตอน setValues (แม้ตั้งฟอร์แมตข้อความไว้) — เติม ' นำหน้ากันไว้
+function checkinCellText_(s) {
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
+// รับค่าตัวเลข: ว่าง/อ่านไม่ออก -> null
+function checkinNum_(v) {
+  if (v === null || v === undefined || String(v).trim() === '') return null;
+  const n = Number(v);
+  return isFinite(n) ? n : null;
+}
+
+function submitPrCheckin(jsonStr) {
+  let d;
+  try { d = JSON.parse(jsonStr); } catch (e) { throw new Error('ข้อมูลเช็คอินอ่านไม่ออก'); }
+  if (!d || typeof d !== 'object') throw new Error('ข้อมูลเช็คอินไม่ถูกต้อง');
+
+  // ---- ตรวจข้อมูลก่อน (ยังไม่แตะชีต/Drive) ----
+  const checkinId = String(d.checkinId || '');
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(checkinId)) throw new Error('รหัสเช็คอินไม่ถูกต้อง กรุณาปิดหน้าต่างแล้วเปิดเช็คอินใหม่');
+  const storeCode = checkinText_(d.storeCode, 40);
+  const eventDay = checkinText_(d.eventDay, 20);
+  const dateStr = checkinText_(d.date, 10);
+  const pointName = checkinText_(d.pointName, 200);
+  const pointType = checkinText_(d.pointType, 60);
+  const plannedTime = checkinText_(d.plannedTime, 20);
+  if (!storeCode) throw new Error('ไม่มีรหัสสาขา');
+  if (!eventDay) throw new Error('ไม่มีวัน event (D-x)');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Error('วันที่ไม่ถูกต้อง (ต้องมีวันเปิดสาขาใน Step 1)');
+  if (!pointName) throw new Error('กรุณากรอกชื่อจุด');
+  if (!pointType) throw new Error('กรุณาเลือกประเภทจุด');
+
+  const lat = checkinNum_(d.lat), lng = checkinNum_(d.lng);
+  if (lat === null || lng === null || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw new Error('ไม่มีพิกัด GPS หรือพิกัดไม่ถูกต้อง');
+  const leafletActual = checkinNum_(d.leafletActual);
+  if (leafletActual === null || leafletActual < 0 || leafletActual !== Math.floor(leafletActual)) throw new Error('จำนวนแจกจริงต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป');
+  const leafletTargetRaw = checkinNum_(d.leafletTarget);
+  const leafletTarget = (leafletTargetRaw !== null && leafletTargetRaw >= 0) ? leafletTargetRaw : null;
+
+  const photoBlob = (typeof d.photo === 'string' && /^data:image\/(jpeg|png);base64,/.test(d.photo)) ? dataUrlToBlob_(d.photo) : null;
+  if (!photoBlob) throw new Error('ไม่มีรูปยืนยัน หรือไฟล์รูปไม่ถูกต้อง');
+  if (photoBlob.getBytes().length > CHECKIN_MAX_PHOTO_BYTES_) throw new Error('รูปใหญ่เกินไป กรุณาถ่ายใหม่');
+
+  // ระยะห่างจากพิกัดในแผน — แผนไม่มีพิกัด = เว้นว่าง
+  const planLat = checkinNum_(d.planLat), planLng = checkinNum_(d.planLng);
+  const distance = (planLat !== null && planLng !== null && Math.abs(planLat) <= 90 && Math.abs(planLng) <= 180)
+    ? Math.round(haversineMeters_(planLat, planLng, lat, lng)) : '';
+
+  // เวลาเช็คอิน = เวลาที่เครื่องจับพิกัดได้จริง (ถ้าส่งช้าเพราะเน็ตหลุด เวลาจะยังตรงกับตอนอยู่หน้างาน)
+  // แต่ถ้าเวลาจากเครื่องดูผิดปกติ (ล่วงหน้าเกิน 5 นาที หรือเก่ากว่า 12 ชม.) ใช้เวลาที่เซิร์ฟเวอร์ได้รับแทน
+  const now = new Date();
+  const gpsMs = checkinNum_(d.gpsTime);
+  const checkinAt = (gpsMs !== null && gpsMs <= now.getTime() + 5 * 60 * 1000 && gpsMs >= now.getTime() - 12 * 3600 * 1000)
+    ? new Date(gpsMs) : now;
+  const checkinDatetime = Utilities.formatDate(checkinAt, CHECKIN_TZ_, 'yyyy-MM-dd HH:mm');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) throw new Error('ระบบกำลังบันทึกของคนอื่นอยู่ รอสักครู่แล้วกดส่งอีกครั้ง (ไม่บันทึกซ้ำ)');
+  try {
+    const ss = getCheckinSpreadsheet_();
+    const sheet = getCheckinSheet_(ss);
+    const idSheet = getCheckinIdSheet_(ss);
+
+    // ---- กันซ้ำ: รหัสนี้เคยบันทึกแล้ว -> ไม่เขียนใหม่ ----
+    const idRows = Math.max(idSheet.getLastRow() - 1, 1); // ข้ามแถวหัวตาราง
+    const found = idSheet.getRange(2, 1, idRows, 1).createTextFinder(checkinId).matchEntireCell(true).findNext();
+    if (found) {
+      const prev = idSheet.getRange(found.getRow(), 1, 1, 4).getValues()[0];
+      return { duplicate: true, row: Number(prev[1]) || null, photoUrl: String(prev[3] || ''), checkinDatetime: '' };
+    }
+
+    // ---- เก็บรูปใน Drive ----
+    const safeCode = storeCode.replace(/[^A-Za-z0-9_-]/g, '');
+    const safeDay = eventDay.replace(/[^A-Za-z0-9_-]/g, '');
+    const fileName = (safeCode || 'store') + '_' + (safeDay || 'D') + '_' +
+      Utilities.formatDate(checkinAt, CHECKIN_TZ_, 'yyyyMMdd-HHmm') + '_' + checkinId.slice(0, 8) + '.jpg';
+    photoBlob.setName(fileName);
+    const file = getCheckinPhotoFolder_().createFile(photoBlob);
+    const photoUrl = file.getUrl();
+
+    // ---- เขียนแถว (ตั้งฟอร์แมตก่อนใส่ค่า เพื่อให้ช่องข้อความเป็นข้อความล้วนเสมอ) ----
+    const n = CHECKIN_HEADER_KEYS_.length;
+    const row = Math.max(sheet.getLastRow(), 2) + 1;
+    if (row > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 200);
+    const pct = (leafletTarget !== null && leafletTarget > 0) ? leafletActual / leafletTarget : '';
+    const values = [checkinCellText_(storeCode), checkinCellText_(eventDay), dateStr, checkinCellText_(pointName),
+      checkinCellText_(pointType), checkinCellText_(plannedTime),
+      leafletTarget === null ? '' : leafletTarget, checkinDatetime, lat, lng, distance, photoUrl, leafletActual, pct];
+    const rng = sheet.getRange(row, 1, 1, n);
+    rng.setNumberFormats([CHECKIN_COL_FORMATS_]);
+    rng.setValues([values]);
+
+    idSheet.appendRow([checkinId, String(row), Utilities.formatDate(now, CHECKIN_TZ_, 'yyyy-MM-dd HH:mm:ss'), photoUrl]);
+    SpreadsheetApp.flush(); // เขียนให้เสร็จจริงก่อนปล่อย lock คนถัดไปจะได้เห็นแถวล่าสุด
+    return { duplicate: false, row: row, photoUrl: photoUrl, checkinDatetime: checkinDatetime };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ================= PPTX generation (added) =================
 // Builds the same slide deck as the old generate_packgo.js Node script,
 // but natively inside Apps Script using Google Slides, then exports the
