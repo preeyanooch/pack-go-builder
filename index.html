@@ -3551,14 +3551,18 @@ function initLoginGate(){
   document.getElementById('gateName').addEventListener('keydown', (ev) => { if(ev.key === 'Enter') document.getElementById('gatePassword').focus(); });
 }
 
-// backend ใหม่: Vercel + Supabase แทน Apps Script เดิม (เร็วกว่า ไม่มีบั๊ก Drive สุ่ม ๆ)
-const WEBAPP_URL = "https://pack-go-builder-backend.vercel.app/api/gsrun";
+// backend v2: Google Apps Script อย่างเดียว (ข้อมูลอยู่ใน Google Sheet + รูปอยู่ใน Google Drive)
+// วางลิงก์ /exec ที่ได้ตอน Deploy Apps Script เป็น Web app ตรงนี้ (ดูขั้นตอนใน SETUP.md)
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwwPrMFH2TzobwkQ0LfPLOKxABy025oQcslOp6HGEfXjZx5beYkhU7LdCOw0XiPTf0f/exec";
 // Apps Script /exec บางครั้งตอบกลับเป็นหน้า error ของ Google Drive แทนผลลัพธ์จริงแบบสุ่ม ๆ
 // (บั๊กที่รู้จักกันดีของ Google เอง ไม่ใช่จากโค้ดนี้) — ลองใหม่เงียบ ๆ ก่อนค่อยแจ้ง error จริง
 const GSRUN_MAX_RETRIES = 3;
 const GSRUN_RETRY_DELAY_MS = 800;
 function gsRunSleep_(ms){ return new Promise((resolve) => setTimeout(resolve, ms)); }
 async function gsRunAttempt_(funcName, args){
+  if(!/^https:\/\/script\.google\.com\//.test(WEBAPP_URL)){
+    throw new Error('ยังไม่ได้ใส่ลิงก์ Apps Script (WEBAPP_URL) ใน index.html — ดูขั้นตอนใน SETUP.md');
+  }
   const res = await fetch(WEBAPP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // เลี่ยง CORS preflight
@@ -3659,47 +3663,20 @@ async function saveSessionSilently(){
   }
 }
 
-const PHOTO_CHUNK_SIZE = 35000;
 function currentBranchKey(){
   return document.getElementById('branchName').value || document.getElementById('branchCode').value || '';
 }
-// บันทึกรูปแบบแบ่งเป็นชิ้นๆ ไป Google Sheet — เดิมถ้าเน็ตสะดุดกลาง loop (พบบ่อยตอนอยู่หน้างานจริง
-// สัญญาณอ่อน) การบันทึกจะหยุดครึ่งๆ กลางๆ แบบเงียบๆ ไม่มีใครรู้ตัว พอโหลดกลับมาดูทีหลัง (คนละเครื่อง/
-// คนละวัน) รูปจะกลายเป็นไฟล์เสีย/เปิดไม่ขึ้น — ตอนนี้เลยเพิ่ม retry ทีละชิ้น + เช็คย้อนกลับหลังบันทึกเสร็จ
-// ว่าข้อมูลที่อยู่บนเซิร์ฟเวอร์ตรงกับที่ส่งไปจริงๆ ถ้าไม่ตรง/ไม่ครบ จะโยน error ออกมาให้ผู้เรียกไปแจ้งเตือนต่อ
-// แทนที่จะปล่อยผ่านแบบเงียบๆ เหมือนเดิม
+// v2: 1 รูป = 1 ไฟล์ใน Google Drive (โฟลเดอร์ของสาขา) ส่งทีเดียวจบ ไม่ต้องหั่นเป็นชิ้นเหมือนเดิม
+// dataUrl ว่าง = ลบรูปช่องนั้น — ส่งซ้ำได้ปลอดภัย (เซิร์ฟเวอร์แทนที่รูปเดิมของช่องเดียวกัน ไม่เกิดรูปซ้ำ)
+// บันทึกเสร็จแล้วสั่งบันทึกสาขาตาม เพื่อให้ลิงก์รูปในตาราง Google Sheet อัปเดตด้วย
 async function savePhotoToSheet(ownerId, dataUrl){
   const branchKey = currentBranchKey();
   if(!branchKey) return;
-  const key = branchKey + '::' + ownerId;
-  await gsRun('deletePhotoChunks', key);
-  if(!dataUrl) return;
-  for(let i = 0, idx = 0; i < dataUrl.length; i += PHOTO_CHUNK_SIZE, idx++){
-    const chunk = dataUrl.slice(i, i + PHOTO_CHUNK_SIZE);
-    let ok = false, lastErr = null;
-    for(let attempt = 0; attempt < 3 && !ok; attempt++){
-      try{ await gsRun('savePhotoChunk', key, idx, chunk); ok = true; }
-      catch(e){ lastErr = e; }
-    }
-    if(!ok) throw new Error('บันทึกรูปไม่สำเร็จ ณ ส่วนที่ ' + (idx+1) + ' (เน็ตอาจไม่เสถียร): ' + (lastErr && lastErr.message));
-  }
-  // เช็คย้อนกลับว่าที่บันทึกไปครบจริงตามที่ส่ง — กันไฟล์เสีย/ไม่ครบแบบเงียบๆ ที่ตรวจไม่พบจนกว่าจะโหลดกลับมาดูทีหลัง
-  // ลองเช็คซ้ำสั้นๆ ก่อนสรุปว่าพัง เผื่อฝั่ง Google Sheets อัปเดต/อ่านกลับไม่ทันจริงๆ ในเสี้ยววินาทีแรก
-  // (พบเคสที่ขึ้นเตือนว่าไม่สำเร็จ ทั้งที่จริงๆ บันทึกครบแล้ว — พอลองสร้างสไลด์ใหม่กลับเจอรูปปกติ)
-  const VERIFY_RETRY_DELAYS_MS = [0, 1000, 2000, 3000];
-  for(let v = 0; v < VERIFY_RETRY_DELAYS_MS.length; v++){
-    if(VERIFY_RETRY_DELAYS_MS[v]) await new Promise(r => setTimeout(r, VERIFY_RETRY_DELAYS_MS[v]));
-    const verify = await gsRun('loadPhotoChunks', key);
-    if(verify === dataUrl) return;
-  }
-  throw new Error('บันทึกรูปไปเซิร์ฟเวอร์ไม่ครบ (ข้อมูลที่เช็คย้อนกลับไม่ตรงกับที่ส่งไป)');
+  await gsRun('savePhoto', branchKey, ownerId, dataUrl || '');
+  scheduleAutosave();
 }
-// loadPhotoChunks บนเซิร์ฟเวอร์คืนค่า '' เฉยๆ ถ้า "ไม่เคยมีรูปนี้จริงๆ" (ไม่ throw) — ดังนั้นถ้า
-// gsRun ตรงนี้ throw จริงๆ แปลว่าเช็คไม่สำเร็จ (เน็ต/Apps Script มีปัญหา) ไม่ใช่ "ไม่มีรูป, ไม่เป็นไร"
-// เดิมโค้ดตรงนี้ปนสองเคสนี้เป็นอันเดียวกัน (catch แล้วเงียบ) ทำให้ถ้าโหลดไม่สำเร็จชั่วคราว หน้าเว็บ
-// จะโชว์ว่า "ไม่มีรูป" ทั้งที่จริงๆ มีอยู่บนเซิร์ฟเวอร์ — ถ้าผู้ใช้เข้าใจผิดแล้วแนบรูปใหม่ทับช่องนั้น
-// savePhotoToSheet จะลบรูปเดิมทิ้งจริงถาวรก่อนเขียนรูปใหม่ (ดูคอมเมนต์ที่นั่น) เท่ากับรูปเดิมหายจริง
-// ทางแก้: แยกสองเคสนี้ออกจากกัน แล้วเตือนผู้ใช้ชัดๆ ถ้าเช็คไม่สำเร็จ กันเผลอแนบรูปทับของจริง
+// ตอนโหลดรูปกลับ ต้องแยก "ไม่มีรูปจริง" ออกจาก "เช็คไม่สำเร็จ (เน็ต/Apps Script มีปัญหา)" ให้ชัด
+// ถ้าปนกัน ผู้ใช้จะเห็นช่องว่างแล้วแนบรูปใหม่ทับรูปเดิมที่จริง ๆ ยังอยู่ — ดู restorePhotosForBranch
 // รันงาน async หลายชิ้นพร้อมกัน แต่จำกัดจำนวนที่วิ่งพร้อมกันจริง ๆ ไว้ไม่เกิน `limit` —
 // เดิมโหลดรูปทีละรูปเรียงคิว (สาขาที่มีสิบกว่าจุดติดป้ายต้องขอรูปแยก 20-30 รอบ เรียงกันไป
 // รอบละหลายวินาทีถ้า Apps Script ไม่เสถียร รวมกันเลยช้ามาก) พอทำพร้อมกันจะเร็วขึ้นมาก แต่ไม่ยิง
@@ -3718,8 +3695,17 @@ async function runWithConcurrencyLimit_(taskFns, limit){
 async function restorePhotosForBranch(branchKey){
   if(!branchKey) return;
   const loadFailures = [];
+  // ขอสารบัญรูปของสาขาก่อน 1 ครั้ง: ช่องไหนไม่อยู่ในสารบัญ = "ไม่มีรูปจริง" (ไม่ต้องยิงถาม)
+  // ถ้าขอสารบัญไม่สำเร็จ = เช็คไม่ได้ทั้งหมด (ห้ามสรุปว่าไม่มีรูป)
+  let photoIndex = null;
+  try{ photoIndex = await gsRun('listPhotos', branchKey) || {}; }
+  catch(e){ photoIndex = null; }
   async function tryLoadPhoto_(key, label){
-    try{ return await gsRun('loadPhotoChunks', key); }
+    const ownerId = key.slice(branchKey.length + 2); // key = "<สาขา>::<ช่องรูป>"
+    if(photoIndex === null){ loadFailures.push(label); return null; }
+    const fileId = photoIndex[ownerId];
+    if(!fileId) return '';
+    try{ return await gsRun('loadPhoto', fileId); }
     catch(e){ loadFailures.push(label); return null; }
   }
   const tasks = [];
@@ -3918,12 +3904,12 @@ function renderSavedListHtml_(names, stale){
   const row = document.getElementById('savedRow');
   if(!names || names.length===0){ row.innerHTML=''; return; }
   const staleNote = stale ? ' <span style="color:var(--muted); font-weight:400;">(ล่าสุดที่เคยเห็น — กำลังเช็คของจริงกับเซิร์ฟเวอร์...)</span>' : '';
-  let html = '<div class="hint" style="margin-bottom:8px;">สาขาที่บันทึกไว้ (ทั้งทีมเห็นร่วมกัน)' + staleNote + ' — กด × เพื่อลบสาขาที่ทำเสร็จแล้ว:</div><div class="saved-list">';
+  let html = '<div class="hint" style="margin-bottom:8px;">สาขาที่บันทึกไว้ (ทั้งทีมเห็นร่วมกัน)' + staleNote + ' — กด × เพื่อเก็บสาขาที่ทำเสร็จแล้วเข้าคลัง:</div><div class="saved-list">';
   names.forEach(name => {
     const esc = name.replace(/'/g,"\\'");
     html += `<div class="saved-chip" style="display:inline-flex; align-items:center; gap:6px;">`
       + `<span onclick="loadSession('${esc}')" style="cursor:pointer;">${name}</span>`
-      + `<span onclick="event.stopPropagation(); deleteBranchUI('${esc}')" title="ลบสาขานี้" `
+      + `<span onclick="event.stopPropagation(); deleteBranchUI('${esc}')" title="เก็บสาขานี้เข้าคลัง" `
       + `style="cursor:pointer; color:var(--red); font-weight:bold; padding:0 4px;">×</span>`
       + `</div>`;
   });
@@ -3943,10 +3929,14 @@ async function refreshSavedList(){
     renderSavedListHtml_(cachedNames, true);
   }
   try{
-    const names = await gsRun('listDrafts');
-    SAVED_DRAFT_NAMES = names || [];
-    try{ localStorage.setItem(SAVED_LIST_CACHE_KEY, JSON.stringify(SAVED_DRAFT_NAMES)); }catch(e){}
-    renderSavedListHtml_(SAVED_DRAFT_NAMES, false);
+    // เซิร์ฟเวอร์ตอบ { active, archived } — โชว์เฉพาะ active แต่นับ archived ด้วยตอนเตือน "ชื่อนี้มีข้อมูลแล้ว"
+    // (กันพิมพ์ชื่อสาขาที่เก็บเข้าคลังไปแล้วเริ่มกรอกใหม่ แล้ว autosave ทับข้อมูลเดิมในคลัง)
+    const res = await gsRun('listDrafts') || {};
+    const active = Array.isArray(res) ? res : (res.active || []);
+    const archived = Array.isArray(res) ? [] : (res.archived || []);
+    SAVED_DRAFT_NAMES = active.concat(archived);
+    try{ localStorage.setItem(SAVED_LIST_CACHE_KEY, JSON.stringify(active)); }catch(e){}
+    renderSavedListHtml_(active, false);
   }catch(e){
     // เช็คของจริงไม่สำเร็จ — ถ้ามีของเก่าโชว์อยู่แล้ว ปล่อยไว้แบบนั้นดีกว่า (ยังใช้งานต่อได้) ไม่ต้องทับด้วย error
     if(!cachedNames || !cachedNames.length){
@@ -3954,16 +3944,15 @@ async function refreshSavedList(){
     }
   }
 }
-// ลบสาขาที่ "ทำเสร็จแล้ว" ออกจากฐานข้อมูลถาวร (draft + รูปทุกรูปของสาขานั้น) — ยิ่งข้อมูลสะสมเยอะ
-// backend ยิ่งช้าลงเรื่อยๆ เพราะทุกครั้งที่บันทึก/โหลด/ดูรายชื่อ ระบบอ่าน "ทั้งชีต" มาสแกนเสมอ
-// (ดูคอมเมนต์ที่ deleteBranchCompletely ฝั่ง Apps Script) ลบเป็นระยะๆ จึงช่วยให้ระบบเร็วขึ้นในระยะยาว
-// ต้องอัปเดต Code.gs ฝั่ง Apps Script ก่อน ไม่งั้นจะขึ้น error "ไม่รู้จักคำสั่ง: deleteBranchCompletely"
+// เก็บสาขาที่ "ทำเสร็จแล้ว" เข้าคลัง (แทนการลบถาวร) — หายจากรายชื่อในหน้านี้ แต่ข้อมูลและรูป
+// ยังอยู่ครบใน Google Sheet / Drive ให้หัวหน้าเปิดดูย้อนหลังได้ (tab "สาขา" คอลัมน์สถานะ = เก็บถาวร)
+// อยากเอากลับมาแก้: พิมพ์ชื่อสาขาเดิมแล้วกด "ตกลง" ให้โหลดข้อมูลเดิม บันทึกครั้งถัดไปสถานะจะกลับเป็นใช้งาน
 async function deleteBranchUI(name){
-  if(restoringSessionCount > 0){ alert('กำลังโหลดข้อมูลอยู่ กรุณารอสักครู่ก่อนลบ'); return; }
-  const sure = confirm(`⚠️ ลบสาขา "${name}" ถาวร?\n\nจะลบทั้งข้อมูลฟอร์มและรูปภาพทั้งหมดของสาขานี้ออกจากระบบ กู้คืนไม่ได้\n\nใช้เมื่อสาขานี้ "ทำเสร็จแล้ว" จริงๆ เท่านั้น`);
+  if(restoringSessionCount > 0){ alert('กำลังโหลดข้อมูลอยู่ กรุณารอสักครู่ก่อน'); return; }
+  const sure = confirm(`เก็บสาขา "${name}" เข้าคลัง?\n\nสาขานี้จะหายจากรายชื่อในหน้านี้ แต่ข้อมูลและรูปยังอยู่ครบใน Google Sheet / Drive`);
   if(!sure) return;
   try{
-    const result = await gsRun('deleteBranchCompletely', name);
+    await gsRun('archiveBranch', name);
     if(currentLoadedBranchKey === name){
       applyState({});
       currentLoadedBranchKey = '';
@@ -3971,9 +3960,9 @@ async function deleteBranchUI(name){
       document.getElementById('finalSection').classList.add('hidden');
     }
     await refreshSavedList();
-    alert(`✅ ลบสาขา "${name}" แล้ว (รูปภาพที่ลบไปด้วย: ${result && result.deletedPhotoRows || 0} ชิ้น)`);
+    alert(`✅ เก็บสาขา "${name}" เข้าคลังแล้ว`);
   }catch(e){
-    alert('ลบไม่สำเร็จ: ' + e.message);
+    alert('เก็บเข้าคลังไม่สำเร็จ: ' + e.message);
   }
 }
 function clearAll(){

@@ -10,15 +10,19 @@ Pack GO Builder (CJX New Store) คือเว็บแอปหน้าเด
 
 | ไฟล์ | คืออะไร |
 |---|---|
-| `index.html` | front end ทั้งหมด (ประมาณ 250KB): หน้าเข้าสู่ระบบ, ฟอร์มสาขา, PR, ป้าย, Layout composer, JSON/PPT, cache แบบ stale-while-revalidate + สำรองข้อมูลไว้ในเครื่อง |
-| `backend/Code.gs` | Google Apps Script: doGet/doPost, save/load/list/delete draft, เก็บรูปแบบแบ่งชิ้น, checkLogin (access sheet), getBranchMasterData, createPackGoSlides |
-| Vercel proxy | front end เรียกผ่าน `WEBAPP_URL` (`.../api/gsrun`) ตัวโค้ด proxy ไม่ได้อยู่ใน repo นี้ |
+| `index.html` | front end ทั้งหมด (ประมาณ 290KB) ฝากบน GitHub Pages: หน้าเข้าสู่ระบบ, ฟอร์มสาขา, PR, ป้าย, Layout composer, JSON/PPT, cache แบบ stale-while-revalidate + สำรองข้อมูลไว้ในเครื่อง เรียกหลังบ้านที่ `WEBAPP_URL` (/exec ของ Apps Script) |
+| `backend/Code.gs` | Google Apps Script (v2 ไม่มี Vercel/Supabase แล้ว): login แบบ token, บันทึก/โหลด/เก็บเข้าคลังสาขา, รูป 1 รูป = 1 ไฟล์ใน Drive, รายชื่อสาขาจาก tab "รายชื่อสาขา", PR Check-in, createPackGoSlides |
+| `SETUP.md` | ขั้นตอนติดตั้ง/deploy/เทส v2 สำหรับคนไม่เขียนโค้ด |
+
+ข้อมูลอยู่ใน Drive ของเจ้าของสคริปต์ โฟลเดอร์ "CJX Pack GO Builder": ชีต "ข้อมูลทั้งหมด" (tab ที่คนอ่าน + tab ซ่อน `_drafts`, `_photos`, `_checkin_ids`) และโฟลเดอร์รูป/สไลด์
+ทุกครั้งที่บันทึกสาขา ระบบเขียนแถวของสาขานั้นใน tab ที่คนอ่านใหม่ทั้งชุด (เขียนเฉพาะ tab ที่ข้อมูลเปลี่ยน ดูจาก tab_hashes)
+ไฟล์ "รายชื่อผู้ใช้" (มีรหัสผ่าน) ตั้งใจวางไว้นอกโฟลเดอร์หลัก ห้ามย้ายเข้าไป
 
 ## ทีมประจำโปรเจค: ส่งงานตามเลน
 
 | งาน | ส่งให้ |
 |---|---|
-| เขียน/แก้/รีวิวโค้ด, debug, Apps Script, Vercel/Supabase, UI/UX, สไลด์ที่สร้างอัตโนมัติ, อธิบายเรื่องเทคให้เข้าใจง่าย | **Kiki** (`nsa-store-performance:tech-engineer`) |
+| เขียน/แก้/รีวิวโค้ด, debug, Apps Script, UI/UX, สไลด์ที่สร้างอัตโนมัติ, อธิบายเรื่องเทคให้เข้าใจง่าย | **Kiki** (`nsa-store-performance:tech-engineer`) |
 | วันเปิดสาขา/D-day/วัน D+4 ของป้ายตรงกับความจริงไหม, ใครดูแลสาขา, สาขาหายไปหรือค้างใน roster, ข้อมูล branch master ถูกไหม | **Coco** (`nsa-store-performance:data-integrity-tracker`) |
 | ตัวเลขยอดขาย/สมาชิกเทียบเป้า D1–D5 (1,000,000 บาท + สมาชิกใหม่ 600 คน) หรือ D6–D90 (active member 4,000 คน), แผน PR ช่วยให้ถึงเป้าไหม | **Lala** (`nsa-store-performance:performance-analyst`) |
 | โจทย์ข้ามเลน, ไม่ชัดว่าเป็นของใคร, หรือต้องการสรุปรวม | **Winky** (`nsa-store-performance:team-lead`) |
@@ -32,9 +36,10 @@ Pack GO Builder (CJX New Store) คือเว็บแอปหน้าเด
 ## กติกาโค้ด (Kiki)
 
 - ต้องโหลด skill `nsa-store-performance:tech-build-review` ก่อนแตะโค้ด
-- commit, push, deploy Apps Script, deploy Vercel และแก้ Supabase ต้องได้รับคำสั่งจากผู้ใช้ก่อนทุกครั้ง
+- commit, push และ deploy Apps Script ต้องได้รับคำสั่งจากผู้ใช้ก่อนทุกครั้ง
 - ห้ามเปิด ห้ามอ่าน ห้ามพิมพ์ซ้ำ `.env`, API key, token หรือรหัสผ่าน ถ้าเจอในโค้ดให้แจ้งผู้ใช้และให้ IT Security เปลี่ยน key
-- ระวังจุดที่เคยพังมาแล้ว: ห้าม autosave ระหว่างที่โหลด draft, โหลดรูปไม่สำเร็จต้องแยกให้ออกจากกรณีที่ไม่มีรูปจริง, ห้าม retry การสร้างสไลด์ตอนเน็ตสะดุด
+- ระวังจุดที่เคยพังมาแล้ว: ห้าม autosave ระหว่างที่โหลด draft, โหลดรูปไม่สำเร็จต้องแยกให้ออกจากกรณีที่ไม่มีรูปจริง (ใช้สารบัญ listPhotos), ห้าม retry การสร้างสไลด์ตอนเน็ตสะดุด, ห้ามเก็บรูปเป็นข้อความในเซลล์ชีต
+- loadPhoto ต้องอ่านได้เฉพาะไฟล์ที่อยู่ใน `_photos` เท่านั้น (สคริปต์รันด้วยสิทธิ์เจ้าของ อ่าน Drive เจ้าของได้ทั้งหมด)
 - ก่อนแก้ `backend/Code.gs` ให้ดู `git status` ก่อน อาจมีงานที่ยังไม่ได้ commit ค้างอยู่
 - สรุปงานเป็นภาษาง่าย พร้อมบอกวิธีวางโค้ดและวิธีเทส
 

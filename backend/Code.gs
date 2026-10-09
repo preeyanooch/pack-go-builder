@@ -1,43 +1,103 @@
 /**
- * CJX Pack GO Builder — Apps Script backend
- * Serves index.html as a Web App and stores drafts in a Google Sheet
- * (auto-created on first run) so the team can save/resume from any device,
- * with no dependency on Claude or any other external service.
+ * CJX Pack GO Builder — Apps Script backend (v2: Google อย่างเดียว ไม่มี Vercel / Supabase)
  *
- * ===== ไฟล์นี้คือ Code.gs ฉบับสมบูรณ์ ทับได้ทั้งไฟล์ =====
- * วิธีติดตั้ง: เปิด Code.gs ในระบบ กด Ctrl+A (เลือกทั้งหมด) แล้วลบ จากนั้น
- * ก็อปข้อความทั้งหมดในไฟล์นี้ไปวางแทน กด Save (Ctrl+S) แล้วลองใหม่ได้เลยค่ะ
- * ไฟล์นี้รวมทุกอย่างที่เคยส่งให้ก่อนหน้านี้ไว้ครบแล้ว (ระบบ login, บันทึก
- * draft, ฟีเจอร์โครงค้ำ, และตัวแก้ error สร้างสไลด์แบบลองใหม่อัตโนมัติ)
- * ไม่มีของซ้ำหรือของเก่าที่ขัดกันอีกต่อไป
+ * หน้าเว็บ (ฝากไว้บน GitHub Pages) ยิง fetch() มาที่ /exec ของโปรเจกต์นี้ตรง ๆ
+ * ข้อมูลทั้งหมดอยู่ใน Google Drive ของเจ้าของสคริปต์ ใต้โฟลเดอร์เดียว:
+ *
+ *   CJX Pack GO Builder/
+ *     ├─ CJX Pack GO — ข้อมูลทั้งหมด   (Google Sheet ที่หัวหน้าเปิดดู แยก tab ตามหัวข้อ)
+ *     ├─ รูปสาขา/<ชื่อสาขา>/             (รูปทุกรูปเป็นไฟล์ jpg กดเปิดดูใน Drive ได้)
+ *     ├─ รูปเช็คอิน PR/
+ *     └─ สไลด์ Pack GO/
+ *   + "CJX Pack GO — รายชื่อผู้ใช้" (ชื่อ + รหัสผ่าน) อยู่นอกโฟลเดอร์นี้ใน My Drive ตั้งใจไม่ให้ติดไปตอนแชร์
+ *
+ * วิธีติดตั้งอยู่ในไฟล์ SETUP.md (รัน setup() ครั้งแรก 1 ครั้ง แล้ว Deploy เป็น Web app)
  */
 
-// หมายเหตุ: index.html ไม่ได้ถูกเสิร์ฟผ่าน doGet อีกต่อไป (หน้าเว็บย้ายไปฝากที่อื่นแล้ว
-// เพื่อเลี่ยงบั๊กของ Google ที่ทำให้หน้าเว็บโหลดไม่ขึ้นเวลาเสิร์ฟผ่าน HtmlService)
-// โปรเจกต์นี้ทำหน้าที่เป็น "API หลังบ้าน" อย่างเดียว รับคำสั่งผ่าน doPost() ด้านล่าง
-function doGet() {
-  return ContentService.createTextOutput('CJX PackGO Builder API - ok');
+// ===================== ค่าตั้งต้น (แก้ได้ที่นี่ที่เดียว) =====================
+const APP_TZ_ = 'Asia/Bangkok';
+const ROOT_FOLDER_NAME_ = 'CJX Pack GO Builder';
+const MAIN_SHEET_NAME_ = 'CJX Pack GO — ข้อมูลทั้งหมด';
+const USERS_SHEET_NAME_ = 'CJX Pack GO — รายชื่อผู้ใช้ (ห้ามแชร์)';
+const TOKEN_TTL_MS_ = 12 * 60 * 60 * 1000;      // เข้าสู่ระบบ 1 ครั้งใช้ได้ 12 ชม.
+const MAX_PHOTO_BYTES_ = 5 * 1024 * 1024;       // รูปละไม่เกิน 5MB (หน้าเว็บย่อรูปให้ก่อนส่งอยู่แล้ว)
+const LOGIN_MAX_FAILS_ = 8;                     // ใส่รหัสผิดเกินนี้ใน 10 นาที -> ล็อกชื่อนั้นชั่วคราว
+
+// ชื่อ tab ซ่อน (แอปใช้ ไม่ต้องเปิดดู) — ขึ้นต้นด้วย _ ทั้งหมด
+const DRAFTS_TAB_ = '_drafts';   // ข้อมูลทั้งก้อนของแต่ละสาขา ไว้ให้แอปโหลดกลับมาแก้ต่อ
+const PHOTOS_TAB_ = '_photos';   // สารบัญรูป: สาขา + ช่องรูป -> ไฟล์ใน Drive
+const MASTER_TAB_ = 'รายชื่อสาขา';
+
+// ===================== ตั้งค่าครั้งแรก =====================
+// รันฟังก์ชันนี้ 1 ครั้งจากหน้า editor (เลือก setup แล้วกด Run) เพื่อสร้างโฟลเดอร์ + ชีตทั้งหมด
+// และให้ Google ขอสิทธิ์ Drive/Sheets/Slides ให้ครบ รันซ้ำได้ ไม่สร้างของซ้ำ
+function setup() {
+  const root = getRootFolder_();
+  const ss = getMainSpreadsheet_();
+  Object.keys(TABS_).forEach(function (k) { getTab_(TABS_[k]); });
+  getMasterTab_();
+  getCheckinSheet_(ss);
+  getDraftsTab_();
+  getPhotosTab_();
+  const users = getUsersSheet_();
+  getSubFolder_('FOLDER_PHOTOS', 'รูปสาขา');
+  getCheckinPhotoFolder_();
+  getDecksFolder_();
+  getAuthSecret_();
+  // เรียง tab: tab ที่คนเปิดดูอยู่หน้า, tab ซ่อนอยู่ท้าย
+  const order = [TABS_.branch.name, TABS_.prPlan.name, 'PR Check-in', TABS_.signage.name, TABS_.hotels.name,
+    TABS_.parking.name, TABS_.shopLeads.name, TABS_.help.name, MASTER_TAB_];
+  order.forEach(function (name, i) {
+    const sh = ss.getSheetByName(name);
+    if (sh) { ss.setActiveSheet(sh); ss.moveActiveSheet(i + 1); }
+  });
+  // ลบแผ่นว่าง Sheet1 ที่ Google สร้างให้ตอนสร้างไฟล์ (ถ้ายังว่างอยู่)
+  const blank = ss.getSheetByName('Sheet1') || ss.getSheetByName('ชีต1');
+  if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
+  Logger.log('โฟลเดอร์หลัก: ' + root.getUrl());
+  Logger.log('ชีตข้อมูลทั้งหมด: ' + ss.getUrl());
+  Logger.log('ชีตรายชื่อผู้ใช้ (ใส่ชื่อ+รหัสที่นี่): ' + users.getParent().getUrl());
 }
 
-// ---------- HTTP RPC bridge (API หลังบ้าน) ----------
-// หน้าเว็บ (ที่ฝากไว้นอก Google แล้ว) ยิง fetch() มาที่นี่ แล้ว dispatch ไปเรียกฟังก์ชันจริงตาม whitelist ด้านล่าง
+// ===================== API (หน้าเว็บเรียกผ่าน doPost) =====================
+function doGet() {
+  return ContentService.createTextOutput('CJX PackGO Builder API v2 - ok');
+}
+
+// คำสั่งที่หน้าเว็บเรียกได้ (ต้องเข้าสู่ระบบแล้วทุกคำสั่ง ยกเว้น checkLogin)
+const API_ = {
+  listDrafts: listDrafts,
+  loadDraft: loadDraft,
+  saveDraft: saveDraft,
+  archiveBranch: archiveBranch,
+  listPhotos: listPhotos,
+  loadPhoto: loadPhoto,
+  savePhoto: savePhoto,
+  getBranchMasterData: getBranchMasterData,
+  createPackGoSlides: createPackGoSlides,
+  submitPrCheckin: submitPrCheckin
+};
+let CURRENT_USER_ = ''; // ชื่อคนที่เรียกอยู่ (มาจาก token ที่เซิร์ฟเวอร์ออกให้ ปลอมไม่ได้)
+
 function doPost(e) {
   let out;
   try {
     const body = JSON.parse(e.postData.contents);
-    const fnName = body.fn;
+    const fnName = String(body.fn || '');
     const args = Array.isArray(body.args) ? body.args : [];
-    // ข้อมูลสาขา/รูป/การเข้าสู่ระบบย้ายไป Supabase (ผ่าน proxy บน Vercel) หมดแล้ว — ที่นี่เหลือแค่
-    // งานที่ต้องใช้ Google จริง ๆ: สร้างสไลด์ + รายชื่อสาขากลาง ฟังก์ชันเก่าที่เหลือในไฟล์เรียกจากภายนอกไม่ได้แล้ว
-    // (ปิดไว้กันคนที่รู้ลิงก์ /exec ยิงตรงมาอ่าน/เขียน/ลบข้อมูลในชีตเก่า)
-    // submitPrCheckin = เช็คอินจุดประชาสัมพันธ์หน้างาน (เขียนแถวลงชีต PR Check-in + เก็บรูปใน Drive)
-    const whitelist = {
-      getBranchMasterData, createPackGoSlides, submitPrCheckin
-    };
-    const fn = whitelist[fnName];
-    if (!fn) throw new Error('ไม่รู้จักคำสั่ง: ' + fnName);
-    const result = fn.apply(null, args);
-    out = { ok: true, result: result };
+    if (fnName === 'checkLogin') {
+      out = { ok: true, result: checkLogin(args[0], args[1]) };
+    } else {
+      const user = verifyToken_(body.token);
+      if (!user) {
+        out = { ok: false, code: 'AUTH_REQUIRED', error: 'กรุณาเข้าสู่ระบบใหม่' };
+      } else {
+        const fn = Object.prototype.hasOwnProperty.call(API_, fnName) ? API_[fnName] : null;
+        if (!fn) throw new Error('ไม่รู้จักคำสั่ง: ' + fnName);
+        CURRENT_USER_ = user;
+        out = { ok: true, result: fn.apply(null, args) };
+      }
+    }
   } catch (err) {
     out = { ok: false, error: (err && err.message) ? err.message : String(err) };
   }
@@ -45,252 +105,561 @@ function doPost(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ---------- Storage backend (Google Sheet, auto-created on first run) ----------
-function getSpreadsheet_() {
+// ===================== เข้าสู่ระบบ =====================
+function getAuthSecret_() {
   const props = PropertiesService.getScriptProperties();
-  let ssId = props.getProperty('SHEET_ID');
+  let s = props.getProperty('AUTH_SECRET');
+  if (!s) {
+    s = Utilities.getUuid() + Utilities.getUuid(); // สุ่มเองครั้งแรก เก็บใน Script Properties ไม่อยู่ในโค้ด
+    props.setProperty('AUTH_SECRET', s);
+  }
+  return s;
+}
+function signToken_(payload) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload, getAuthSecret_()));
+}
+function makeToken_(name) {
+  const payload = Utilities.base64EncodeWebSafe(JSON.stringify({ n: name, e: Date.now() + TOKEN_TTL_MS_ }), Utilities.Charset.UTF_8);
+  return payload + '.' + signToken_(payload);
+}
+// คืนชื่อผู้ใช้ถ้า token ถูกต้อง ยังไม่หมดอายุ และชื่อนั้นยังอยู่ในรายชื่อผู้ใช้ — ไม่งั้นคืน null
+function verifyToken_(token) {
+  if (typeof token !== 'string') return null;
+  const dot = token.indexOf('.');
+  if (dot < 1) return null;
+  const payload = token.slice(0, dot);
+  if (signToken_(payload) !== token.slice(dot + 1)) return null;
+  let d;
+  try { d = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(payload)).getDataAsString('UTF-8')); }
+  catch (e) { return null; }
+  if (!d || !d.n || !(d.e > Date.now())) return null;
+  // ลบชื่อออกจากรายชื่อผู้ใช้แล้ว -> ใช้งานไม่ได้ภายใน 5 นาที (ไม่ต้องรอ token หมดอายุ)
+  if (getActiveUserNames_().indexOf(normalizeName_(d.n)) === -1) return null;
+  return String(d.n);
+}
+
+function getUsersSheet_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('USERS_SHEET_ID');
   let ss = null;
-
-  if (ssId) {
-    try {
-      ss = SpreadsheetApp.openById(ssId);
-    } catch (e) {
-      ssId = null; // stored id no longer valid, recreate below
-    }
+  if (id) { try { ss = SpreadsheetApp.openById(id); } catch (e) { ss = null; } }
+  if (!ss) {
+    // ตั้งใจไม่ย้ายเข้าโฟลเดอร์หลัก — โฟลเดอร์หลักจะถูกแชร์ให้หัวหน้า/ทีม แต่ไฟล์นี้มีรหัสผ่าน
+    ss = SpreadsheetApp.create(USERS_SHEET_NAME_);
+    props.setProperty('USERS_SHEET_ID', ss.getId());
+    const sh = ss.getSheets()[0];
+    sh.setName('ผู้ใช้');
+    sh.getRange('A:B').setNumberFormat('@');
+    sh.getRange(1, 1, 2, 2).setValues([['ชื่อ', 'รหัสผ่าน'], ['ตัวอย่าง เช่น สมชาย ใจดี', 'เปลี่ยนรหัสนี้ก่อนใช้งาน']]);
+    sh.getRange(1, 1, 1, 2).setFontWeight('bold');
+    sh.setFrozenRows(1);
   }
-
-  if (!ssId) {
-    ss = SpreadsheetApp.create('CJX PackGO Drafts (do not rename/delete)');
-    props.setProperty('SHEET_ID', ss.getId());
-  }
-  return ss;
+  return ss.getSheets()[0];
 }
-
-// ---------- Photo storage (chunked — a compressed photo can exceed the 50,000
-// char/cell limit on its own, so it's split into multiple rows/cells and
-// reassembled on load). Lives in its own sheet so it never pollutes the
-// list of saved branch names shown in the UI. ----------
-function getPhotoSheet_() {
-  const ss = getSpreadsheet_();
-  let sheet = ss.getSheetByName('Photos');
-  if (!sheet) {
-    sheet = ss.insertSheet('Photos');
-    sheet.appendRow(['Key', 'ChunkIndex', 'ChunkData', 'UpdatedAt']);
-    sheet.setFrozenRows(1);
-  }
-  // บังคับคอลัมน์ Key และ ChunkData ให้เป็น "ข้อความล้วน" (plain text) เสมอ — กัน Google Sheets
-  // ตีความค่าที่เขียนเข้าไปผิดเป็นสูตร/ตัวเลข/วันที่ (ชิ้นข้อมูล base64 ที่สุ่มขึ้นต้นด้วย "=" จะโดน
-  // ตีความเป็นสูตรคำนวณ ทำให้ข้อมูลที่เก็บจริงไม่ตรงกับที่ส่งมาแบบถาวร ไม่ใช่แค่ดีเลย์ — เช็คย้อนกลับ
-  // กี่รอบก็ไม่มีวันตรง เพราะข้อมูลบนชีตพังไปแล้วจริงๆ) ทำทุกครั้งที่เปิดชีตนี้ เผื่อชีตเก่าที่ยังไม่เคยตั้งฟอร์แมต
-  sheet.getRange('A:A').setNumberFormat('@');
-  sheet.getRange('C:C').setNumberFormat('@');
-  return sheet;
+function readUsers_() {
+  const sh = getUsersSheet_();
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return [];
+  return sh.getRange(2, 1, n, 2).getDisplayValues()
+    .filter(function (r) { return r[0] && r[1] && r[1] !== 'เปลี่ยนรหัสนี้ก่อนใช้งาน'; });
 }
-
-/**
- * Save one chunk of a photo. Call deletePhotoChunks(key) first if replacing
- * a photo entirely, so stale extra chunks from a longer previous photo
- * don't linger and corrupt reassembly.
- */
-function savePhotoChunk(key, chunkIndex, chunkData) {
-  const sheet = getPhotoSheet_();
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === key && Number(data[i][1]) === Number(chunkIndex)) {
-      sheet.getRange(i + 1, 3).setValue(chunkData);
-      sheet.getRange(i + 1, 4).setValue(new Date());
-      return true;
-    }
-  }
-  sheet.appendRow([key, chunkIndex, chunkData, new Date()]);
-  return true;
+function getActiveUserNames_() {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('active_users');
+  if (hit) return JSON.parse(hit);
+  const names = readUsers_().map(function (r) { return normalizeName_(r[0]); });
+  cache.put('active_users', JSON.stringify(names), 300);
+  return names;
 }
-
-/**
- * Reassemble all chunks for a key (in order) into the full photo data URL.
- * Returns '' if no chunks are found for that key.
- */
-function loadPhotoChunks(key) {
-  const sheet = getPhotoSheet_();
-  const data = sheet.getDataRange().getValues();
-  const chunks = [];
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === key) chunks.push({ index: Number(data[i][1]), data: data[i][2] });
-  }
-  chunks.sort((a, b) => a.index - b.index);
-  return chunks.map((c) => c.data).join('');
-}
-
-/**
- * Delete all chunks for a key (used before saving a replacement photo,
- * or when a photo is removed entirely).
- */
-function deletePhotoChunks(key) {
-  const sheet = getPhotoSheet_();
-  const data = sheet.getDataRange().getValues();
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] === key) sheet.deleteRow(i + 1);
-  }
-  return true;
-}
-
-/**
- * Save (insert or update) a draft, keyed by branch name/code.
- */
-
-/**
- * Load a draft's JSON string by name, or null if not found.
- */
-function loadDraft(name) {
-  const sheet = getSheet_();
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === name) return data[i][1];
-  }
-  return null;
-}
-
-/**
- * List all saved branch names, most recently updated first.
- */
-function listDrafts() {
-  const sheet = getSheet_();
-  const data = sheet.getDataRange().getValues();
-  const rows = data.slice(1).filter((r) => r[0]);
-  rows.sort((a, b) => new Date(b[2]) - new Date(a[2]));
-  return rows.map((r) => r[0]);
-}
-function debugListDrafts() {
-  const result = listDrafts();
-  Logger.log('RESULT: ' + JSON.stringify(result));
-}
-
-/**
- * Delete a branch's saved draft AND every photo chunk belonging to it
- * (photo keys are stored as "<branchName>::...", so a prefix match on the
- * Photos sheet catches all of them). Lets completed branches be removed
- * fully instead of leaving orphaned photo rows behind forever — every
- * function here reads the WHOLE sheet on every call (see getDataRange()
- * above), so an ever-growing sheet makes every save/load slower over time.
- * Wired to the "ลบสาขานี้" button in the saved-branch list.
- */
-function deleteBranchCompletely(name) {
-  const sheet = getSheet_();
-  const data = sheet.getDataRange().getValues();
-  let deletedDraft = false;
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] === name) {
-      sheet.deleteRow(i + 1);
-      deletedDraft = true;
-    }
-  }
-  const photoSheet = getPhotoSheet_();
-  const photoData = photoSheet.getDataRange().getValues();
-  const prefix = name + '::';
-  let deletedPhotoRows = 0;
-  for (let i = photoData.length - 1; i >= 1; i--) {
-    if (String(photoData[i][0]).indexOf(prefix) === 0) {
-      photoSheet.deleteRow(i + 1);
-      deletedPhotoRows++;
-    }
-  }
-  return { deletedDraft: deletedDraft, deletedPhotoRows: deletedPhotoRows };
-}
-
-/**
- * Delete a draft by name. Optional — not wired into the UI yet,
- * but available if you want to add a "delete" button later.
- */
-function deleteDraft(name) {
-  const sheet = getSheet_();
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === name) {
-      sheet.deleteRow(i + 1);
-      return true;
-    }
-  }
-  return false;
-}
-
-// ---------- Branch master list (moved here from index.html to keep the HTML file small and avoid paste truncation) ----------
-const BRANCH_MASTER = [{"code": "CJX00004", "name": "ห้วยม่วง", "tambon": "ห้วยม่วง", "amphoe": "กำแพงแสน", "province": "นครปฐม", "address": "บ้านเลขที่ 150 หมู่ 4 ตำบลห้วยม่วง อำเภอกำแพงแสน จังหวัดนครปฐม 73180", "mapLink": "https://www.google.com/maps?q=14.130136,100.021865", "coords": "14.130136, 100.021865", "openDate": "2023-12-23", "status": "Active store"}, {"code": "CJX00005", "name": "ลำเหย", "tambon": "ลำเหย", "amphoe": "ดอนตูม", "province": "นครปฐม", "address": "บ้านเลขที่ 223 หมู่ 4 ตำบลลำเหย อำเภอดอนตูม จังหวัดนครปฐม 73150", "mapLink": "https://www.google.com/maps?q=13.952795,100.046045", "coords": "13.952795, 100.046045", "openDate": "2023-12-25", "status": "Active store"}, {"code": "CJX00006", "name": "ชุมชนห้วยด้วน", "tambon": "ห้วยด้วน", "amphoe": "ดอนตูม", "province": "นครปฐม", "address": "บ้านเลขที่ 17 หมู่ 4 ตำบลห้วยด้วน อำเภอดอนตูม จังหวัดนครปฐม 73150", "mapLink": "https://www.google.com/maps?q=13.885199,100.10204", "coords": "13.885199, 100.10204", "openDate": "2024-01-26", "status": "Active store"}, {"code": "CJX00007", "name": "ราษฎร์ศรัทธา", "tambon": "หลักสาม", "amphoe": "บ้านแพ้ว", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 78/8 หมู่ 3 ตำบลหลักสาม อำเภอบ้านแพ้ว จังหวัดสมุทรสาคร 74120", "mapLink": "https://www.google.com/maps?q=13.594816,100.133629", "coords": "13.594816, 100.133629", "openDate": "2023-12-27", "status": "Active store"}, {"code": "CJX00008", "name": "บ้านหนองรี", "tambon": "บ้านเลือก", "amphoe": "โพธาราม", "province": "ราชบุรี", "address": "บ้านเลขที่ 199/19 หมู่ 8 ตำบลบ้านเลือก อำเภอโพธาราม จังหวัดราชบุรี 70120", "mapLink": "https://www.google.com/maps?q=13.731757,99.906247", "coords": "13.731757, 99.906247", "openDate": "2024-01-07", "status": "Active store"}, {"code": "CJX00009", "name": "ลานตากฟ้า", "tambon": "ลานตากฟ้า", "amphoe": "นครชัยศรี", "province": "นครปฐม", "address": "บ้านเลขที่ 83/10 หมู่ 3 ตำบลลานตากฟ้า อำเภอนครชัยศรี จังหวัดนครปฐม 73120", "mapLink": "https://www.google.com/maps?q=13.833089, 100.227841", "coords": "13.833089, 100.227841", "openDate": "2024-01-19", "status": "Active store"}, {"code": "CJX00010", "name": "ลานคา", "tambon": "ไผ่หูช้าง", "amphoe": "บางเลน", "province": "นครปฐม", "address": "ต.ไผ่หูช้าง อ.บางเลน จ.นครปฐม", "mapLink": "https://www.google.com/maps?q=14.043524, 100.117372", "coords": "14.043524, 100.117372", "openDate": null, "status": "Cancel"}, {"code": "CJX00011", "name": "บ้านสร้อยฟ้า", "tambon": "สร้อยฟ้า", "amphoe": "โพธาราม", "province": "ราชบุรี", "address": "บ้านเลขที่ 46/3 หมู่ 5 ตำบลสร้อยฟ้า อำเภอโพธาราม จังหวัดราชบุรี 70120", "mapLink": "https://www.google.com/maps?q=13.737447, 99.841582", "coords": "13.737447, 99.841582", "openDate": "2024-07-18", "status": "Active store"}, {"code": "CJX00012", "name": "สองห้อง", "tambon": "ห้วยขวาง", "amphoe": "กำแพงแสน", "province": "นครปฐม", "address": "บ้านเลขที่ 34 หมู่ 21 ตำบลห้วยขวาง อำเภอกำแพงแสน จังหวัดนครปฐม 73140", "mapLink": "https://www.google.com/maps?q=13.922712, 100.044021", "coords": "13.922712, 100.044021", "openDate": "2024-08-04", "status": "Active store"}, {"code": "CJX00013", "name": "ซอย วปอ.11", "tambon": "ท่าไม้", "amphoe": "กระทุ่มแบน", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 364/11 หมู่ 4 ตำบลท่าไม้ อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74110", "mapLink": "https://www.google.com/maps?q=13.671266, 100.288008", "coords": "13.671266, 100.288008", "openDate": "2024-07-23", "status": "Active store"}, {"code": "CJX00014", "name": "ซอยนวลทอง", "tambon": "สวนหลวง", "amphoe": "กระทุ่มแบน", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 117/4 หมู่ 9 ตำบลสวนหลวง อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74110", "mapLink": "https://www.google.com/maps?q=13.681685, 100.300010", "coords": "13.681685, 100.300010", "openDate": "2024-07-29", "status": "Active store"}, {"code": "CJX00015", "name": "นาคบำรุง", "tambon": "สวนหลวง", "amphoe": "กระทุ่มแบน", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 46/66 หมู่ 7 ตำบลสวนหลวง อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74110", "mapLink": "https://www.google.com/maps?q=13.671198, 100.327767", "coords": "13.671198, 100.327767", "openDate": "2024-07-26", "status": "Active store"}, {"code": "CJX00016", "name": "บ้านม่วงตารศ", "tambon": "ทัพหลวง", "amphoe": "เมืองนครปฐม", "province": "นครปฐม", "address": "บ้านเลขที่ 19/6 หมู่ 8 ตำบลทัพหลวง อำเภอเมืองนครปฐม จังหวัดนครปฐม 73000", "mapLink": "https://www.google.com/maps?q=13.873152, 100.021939", "coords": "13.873152, 100.021939", "openDate": "2024-07-30", "status": "Active store"}, {"code": "CJX00017", "name": "หน้าโรงเรียนการบิน", "tambon": "กระตีบ", "amphoe": "กำแพงแสน", "province": "นครปฐม", "address": "บ้านเลขที่ 7 หมู่ 8 ตำบลกระตีบ อำเภอกำแพงแสน จังหวัดนครปฐม 73180", "mapLink": "https://www.google.com/maps?q=14.088192, 99.943845", "coords": "14.088192, 99.943845", "openDate": "2024-08-09", "status": "Active store"}, {"code": "CJX00018", "name": "ท่าน้ำตื้น", "tambon": "แก่งเสี้ยน", "amphoe": "เมืองกาญจนบุรี", "province": "กาญจนบุรี", "address": "บ้านเลขที่ 35/7 หมู่ 1 ตำบลแก่งเสี้ยน อำเภอเมืองกาญจนบุรี จังหวัดกาญจนบุรี 71000", "mapLink": "https://www.google.com/maps?q=14.051804, 99.473343", "coords": "14.051804, 99.473343", "openDate": "2024-09-05", "status": "Active store"}, {"code": "CJX00019", "name": "คลองราษฎร์สามัคคี", "tambon": "นาดี", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 2/55 หมู่ 9 ตำบลนาดี อำเภอเมืองสมุทรสาคร จังหวัดสมุทรสาคร 74000", "mapLink": "https://www.google.com/maps?q=13.607783, 100.300231", "coords": "13.607783, 100.300231", "openDate": "2024-08-19", "status": "Active store"}, {"code": "CJX00020", "name": "วังขนาย", "tambon": "วังขนาย", "amphoe": "ท่าม่วง", "province": "กาญจนบุรี", "address": "บ้านเลขที่ 127/2 หมู่ 2 ตำบลวังขนาย อำเภอท่าม่วง จังหวัดกาญจนบุรี 71110", "mapLink": "https://www.google.com/maps?q=13.954763, 99.643445", "coords": "13.954763, 99.643445", "openDate": "2024-08-30", "status": "Active store"}, {"code": "CJX00021", "name": "ทุ่งทองกาญจน์", "tambon": "ทุ่งทอง", "amphoe": "ท่าม่วง", "province": "กาญจนบุรี", "address": "บ้านเลขที่ 115/43 หมู่ 3 ตำบลทุ่งทอง อำเภอท่าม่วง จังหวัดกาญจนบุรี 71110", "mapLink": "https://www.google.com/maps?q=13.982739, 99.641670", "coords": "13.982739, 99.641670", "openDate": "2024-08-30", "status": "Active store"}, {"code": "CJX00022", "name": "อ้ออีเขียว", "tambon": "กรับใหญ่", "amphoe": "บ้านโป่ง", "province": "ราชบุรี", "address": "บ้านเลขที่ 115/1 หมู่ 2 ตำบลกรับใหญ่ อำเภอบ้านโป่ง จังหวัดราชบุรี 70190", "mapLink": "https://www.google.com/maps?q=13.900628, 99.858948", "coords": "13.900628, 99.858948", "openDate": "2024-09-11", "status": "Active store"}, {"code": "CJX00023", "name": "บ้านท่าเสา", "tambon": "ท่าเสา", "amphoe": "ท่ามะกา", "province": "กาญจนบุรี", "address": "บ้านเลขที่ 68 หมู่ 5 ตำบลท่าเสา อำเภอท่ามะกา จังหวัดกาญจนบุรี 71120", "mapLink": "https://www.google.com/maps?q=13.865083, 99.806395", "coords": "13.865083, 99.806395", "openDate": "2024-08-27", "status": "Active store"}, {"code": "CJX00024", "name": "หนองอ้อ", "tambon": "หนองอ้อ", "amphoe": "บ้านโป่ง", "province": "ราชบุรี", "address": "บ้านเลขที่ 81 หมู่ 7 ตำบลหนองอ้อ อำเภอบ้านโป่ง จังหวัดราชบุรี 70110", "mapLink": "https://www.google.com/maps?q=13.780370, 99.901610", "coords": "13.780370, 99.901610", "openDate": "2024-09-20", "status": "Active store"}, {"code": "CJX00025", "name": "พงสวาย", "tambon": "พงสวาย", "amphoe": "เมืองราชบุรี", "province": "ราชบุรี", "address": "บ้านเลขที่ 72 หมู่ 4 ตำบลพงสวาย อำเภอเมืองราชบุรี จังหวัดราชบุรี 70000", "mapLink": "https://www.google.com/maps?q=13.537649, 99.848914", "coords": "13.537649, 99.848914", "openDate": "2024-09-18", "status": "Active store"}, {"code": "CJX00026", "name": "ดอนกระเบื้อง", "tambon": "ดอนกระเบื้อง", "amphoe": "โพธาราม", "province": "ราชบุรี", "address": "บ้านเลขที่ 97/3 หมู่ 1 ตำบลดอนกระเบื้อง อำเภอโพธาราม จังหวัดราชบุรี 70120", "mapLink": "https://www.google.com/maps?q=13.754596, 99.915640", "coords": "13.754596, 99.915640", "openDate": "2024-09-23", "status": "Active store"}, {"code": "CJX00027", "name": "เขาปิ่นทอง", "tambon": "ปากช่อง", "amphoe": "จอมบึง", "province": "ราชบุรี", "address": "บ้านเลขที่ 151/1 หมู่ 15 ตำบลปากช่อง อำเภอจอมบึง จังหวัดราชบุรี 70150", "mapLink": "https://www.google.com/maps?q=13.660085, 99.689369", "coords": "13.660085, 99.689369", "openDate": "2024-09-02", "status": "Active store"}, {"code": "CJX00028", "name": "ดอนชะเอม", "tambon": "ดอนชะเอม", "amphoe": "ท่ามะกา", "province": "กาญจนบุรี", "address": "บ้านเลขที่ 42 หมู่ 3 ตำบลดอนชะเอม อำเภอท่ามะกา จังหวัดกาญจนบุรี 71130", "mapLink": "https://www.google.com/maps?q=13.962774, 99.793056", "coords": "13.962774, 99.793056", "openDate": "2024-10-17", "status": "Active store"}, {"code": "CJX00029", "name": "โรงเข้", "tambon": "โรงเข้", "amphoe": "บ้านแพ้ว", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 7/7 หมู่ 2 ตำบลโรงเข้ อำเภอบ้านแพ้ว จังหวัดสมุทรสาคร 70210", "mapLink": "https://www.google.com/maps?q=13.500002, 100.081522", "coords": "13.500002, 100.081522", "openDate": "2024-10-19", "status": "Active store"}, {"code": "CJX00030", "name": "ธรรมศาลา", "tambon": "ธรรมศาลา", "amphoe": "เมืองนครปฐม", "province": "นครปฐม", "address": "บ้านเลขที่ 2/4 หมู่ 4 ตำบลธรรมศาลา อำเภอเมืองนครปฐม จังหวัดนครปฐม 73000", "mapLink": "https://www.google.com/maps?q=13.821044, 100.101528", "coords": "13.821044, 100.101528", "openDate": "2024-10-29", "status": "Active store"}, {"code": "CJX00031", "name": "บางแขม", "tambon": "บางแขม", "amphoe": "เมืองนครปฐม", "province": "นครปฐม", "address": "บ้านเลขที่ 119 หมู่ 10 ตำบลบางแขม อำเภอเมืองนครปฐม จังหวัดนครปฐม 73000", "mapLink": "https://www.google.com/maps?q=13.787213, 100.030059", "coords": "13.787213, 100.030059", "openDate": "2024-10-27", "status": "Active store"}, {"code": "CJX00032", "name": "ถนนรถไฟตะวันตก", "tambon": "ลำพยา", "amphoe": "เมืองนครปฐม", "province": "นครปฐม", "address": "บ้านเลขที่ 113/29 ถนนสาครธนากรตะวันตก ตำบลลำพยา อำเภอเมืองนครปฐม จังหวัดนครปฐม 73000", "mapLink": "https://www.google.com/maps?q=13.823903, 100.031401", "coords": "13.823903, 100.031401", "openDate": "2024-11-08", "status": "Active store"}, {"code": "CJX00033", "name": "ปล่องเหลี่ยม", "tambon": "ท่าไม้", "amphoe": "กระทุ่มแบน", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 84 หมู่ 11 ตำบลท่าไม้ อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74110", "mapLink": "https://www.google.com/maps?q=13.674534, 100.243956", "coords": "13.674534, 100.243956", "openDate": "2024-11-10", "status": "Active store"}, {"code": "CJX00034", "name": "แยกหนองนกไข่", "tambon": "บางช้าง", "amphoe": "สามพราน", "province": "นครปฐม", "address": "บ้านเลขที่ 6/5 หมู่ 7 ตำบลบางช้าง อำเภอสามพราน จังหวัดนครปฐม 73110", "mapLink": "https://www.google.com/maps?q=13.698696, 100.206517", "coords": "13.698696, 100.206517", "openDate": "2024-11-29", "status": "Active store"}, {"code": "CJX00035", "name": "ซอยวัดนางสาว", "tambon": "ท่าไม้", "amphoe": "กระทุ่มแบน", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 158 หมู่ 5 ตำบลท่าไม้ อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74110", "mapLink": "https://www.google.com/maps?q=13.664956, 100.273486", "coords": "13.664956, 100.273486", "openDate": "2024-10-18", "status": "Active store"}, {"code": "CJX00036", "name": "ไพรสะเดา", "tambon": "ดอนทราย", "amphoe": "ปากท่อ", "province": "ราชบุรี", "address": "บ้านเลขที่ 310 หมู่ 2 ตำบลดอนทราย อำเภอปากท่อ จังหวัดราชบุรี 70140", "mapLink": "https://www.google.com/maps?q=13.364665, 99.767455", "coords": "13.364665, 99.767455", "openDate": "2025-03-22", "status": "Active store"}, {"code": "CJX00037", "name": "บ้านปรกวัดคู้สนามจันทร์", "tambon": "บ้านปรก", "amphoe": "เมืองสมุทรสงคราม", "province": "สมุทรสงคราม", "address": "บ้านเลขที่ 30 หมู่ 4 ตําบลบ้านปรก อําเภอเมืองสมุทรสงคราม จังหวัดสมุทรสงคราม 75000", "mapLink": "https://www.google.com/maps?q=13.432547, 99.988535", "coords": "13.432547, 99.988535", "openDate": "2024-10-23", "status": "Active store"}, {"code": "CJX00038", "name": "ซอยเพชรเกษม 130", "tambon": "อ้อมน้อย", "amphoe": "กระทุ่มแบน", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 56/157 หมู่ 5 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130", "mapLink": "https://www.google.com/maps?q=13.711479, 100.288382", "coords": "13.711479, 100.288382", "openDate": "2024-10-27", "status": "Active store"}, {"code": "CJX00039", "name": "บางน้อยใน", "tambon": "จอมปลวก", "amphoe": "บางคนที", "province": "สมุทรสงคราม", "address": "บ้านเลขที่ 9/3 หมู่ 4 ตำบลจอมปลวก อำเภอบางคนที จังหวัดสมุทรสงคราม 75120", "mapLink": "https://www.google.com/maps?q=13.480215, 99.968189", "coords": "13.480215, 99.968189", "openDate": "2024-11-10", "status": "Active store"}, {"code": "CJX00040", "name": "ดอนขมิ้น", "tambon": "ดอนขมิ้น", "amphoe": "ท่ามะกา", "province": "กาญจนบุรี", "address": "บ้านเลขที่ 41/22 หมู่ 1 ตำบลดอนขมิ้น อำเภอท่ามะกา จังหวัดกาญจนบุรี 71120", "mapLink": "https://www.google.com/maps?q=13.874804, 99.821692", "coords": "13.874804, 99.821692", "openDate": "2024-12-10", "status": "Active store"}, {"code": "CJX00041", "name": "ตลาดหัวรอ", "tambon": "นางแก้ว", "amphoe": "โพธาราม", "province": "ราชบุรี", "address": "บ้านเลขที่ 140 หมู่ 2 ตำบลนางแก้ว อำเภอโพธาราม จังหวัดราชบุรี 70120", "mapLink": "https://www.google.com/maps?q=13.691888, 99.762897", "coords": "13.691888, 99.762897", "openDate": "2024-11-22", "status": "Active store"}, {"code": "CJX00042", "name": "กานดา นาดี", "tambon": "นาดี", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 55/67 หมู่ 3 ตำบลนาดี อำเภอเมืองสมุทรสาคร จังหวัดสมุทรสาคร 74000", "mapLink": "https://www.google.com/maps?q=13.582553, 100.307951", "coords": "13.582553, 100.307951", "openDate": "2024-12-06", "status": "Active store"}, {"code": "CJX00043", "name": "อัมพวันสองพี่น้อง", "tambon": "สองพี่น้อง", "amphoe": "สองพี่น้อง", "province": "สุพรรณบุรี", "address": "บ้านเลขที่ 73/9 ถนนโพธิ์อ้น-หวายสอ ตำบลสองพี่น้อง อำเภอสองพี่น้อง จังหวัดสุพรรณบุรี 72110", "mapLink": "https://www.google.com/maps?q=14.213543, 100.025720", "coords": "14.213543, 100.025720", "openDate": "2024-11-20", "status": "Active store"}, {"code": "CJX00044", "name": "ศรีสำราญ สองพี่น้อง", "tambon": "สองพี่น้อง", "amphoe": "สองพี่น้อง", "province": "สุพรรณบุรี", "address": "บ้านเลขที่ 1/6 ถนนศรีสำราญ3 ตำบลสองพี่น้อง อำเภอสองพี่น้อง จังหวัดสุพรรณบุรี 72110", "mapLink": "https://www.google.com/maps?q=14.222040, 100.015750", "coords": "14.222040, 100.015750", "openDate": "2024-11-20", "status": "Active store"}, {"code": "CJX00045", "name": "ตลาดพืชมงคล", "tambon": "อู่ทอง", "amphoe": "อู่ทอง", "province": "สุพรรณบุรี", "address": "บ้านเลขที่ 980 หมู่1 ตำบลอู่ทอง อำเภออู่ทอง จังหวัดสุพรรณบุรี 72160", "mapLink": "https://www.google.com/maps?q=14.358702, 99.882395", "coords": "14.358702, 99.882395", "openDate": "2024-12-08", "status": "Active store"}, {"code": "CJX00046", "name": "บางแม่หม้าย", "tambon": "บางใหญ่", "amphoe": "บางปลาม้า", "province": "สุพรรณบุรี", "address": "บ้านเลขที่ 39 หมู่ 3 ตำบลบางใหญ่ อำเภอบางปลาม้า จังหวัดสุพรรณบุรี 72150", "mapLink": "https://www.google.com/maps?q=14.290286, 100.132512", "coords": "14.290286, 100.132512", "openDate": "2025-07-03", "status": "Active store"}, {"code": "CJX00047", "name": "บ้านวันดี ซอยศรีเมือง", "tambon": "ท่าทราย", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "บ้านเลขที่14/10 หมู่ 7 ตำบลท่าทราย อำเภอเมืองสมุทรสาคร จังหวัดสมุทรสาคร 74000", "mapLink": "https://www.google.com/maps?q=13.574064, 100.264079", "coords": "13.574064, 100.264079", "openDate": "2024-12-25", "status": "Active store"}, {"code": "CJX00048", "name": "วังคัน", "tambon": "วังคัน", "amphoe": "ด่านช้าง", "province": "สุพรรณบุรี", "address": "บ้านเลขที่ 134 หมู่ 8 ตำบลวังคัน อำเภอด่านช้าง จังหวัดสุพรรณบุรี 72180", "mapLink": "https://www.google.com/maps?q=14.958235, 99.642410", "coords": "14.958235, 99.642410", "openDate": "2025-03-13", "status": "Active store"}, {"code": "CJX00049", "name": "บ้านใหม่กิโล 8", "tambon": "หนองมะค่าโมง", "amphoe": "ด่านช้าง", "province": "สุพรรณบุรี", "address": "บ้านเลขที่ 490 หมู่ 4 ตำบลหนองมะค่าโมง อำเภอด่านช้าง จังหวัดสุพรรณบุรี 72180", "mapLink": "https://www.google.com/maps?q=14.844873, 99.751337", "coords": "14.844873, 99.751337", "openDate": "2024-12-10", "status": "Active store"}, {"code": "CJX00050", "name": "วัดเจ็ดริ้ว", "tambon": "เจ็ดริ้ว", "amphoe": "บ้านแพ้ว", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 1/3 หมู่ 3 ตำบลเจ็ดริ้ว อำเภอบ้านแพ้ว จังหวัดสมุทรสาคร 74120", "mapLink": "https://www.google.com/maps?q=13.642994, 100.138997", "coords": "13.642994, 100.138997", "openDate": "2024-12-23", "status": "Active store"}, {"code": "CJX00051", "name": "สามแยกทับกระดาน", "tambon": "บ่อสุพรรณ", "amphoe": "สองพี่น้อง", "province": "สุพรรณบุรี", "address": "บ้านเลขที่ 51 หมู่ 2 ตำบลบ่อสุพรรณ อำเภอสองพี่น้อง จังหวัดสุพรรณบุรี 72190", "mapLink": "https://www.google.com/maps?q=14.142725, 99.915940", "coords": "14.142725, 99.915940", "openDate": "2024-12-12", "status": "Active store"}, {"code": "CJX00052", "name": "วัดใหม่ราษฎร์เจริญธรรม", "tambon": "เกาะศาลพระ", "amphoe": "วัดเพลง", "province": "ราชบุรี", "address": "ต.เกาะศาลพระ อ.วัดเพลง จ.ราชบุรี", "mapLink": "https://www.google.com/maps?q=13.495844, 99.857161", "coords": "13.495844, 99.857161", "openDate": null, "status": "Cancel"}, {"code": "CJX00053", "name": "เปโตร-ดงเกตุ", "tambon": "สามพราน", "amphoe": "สามพราน", "province": "นครปฐม", "address": "บ้านเลขที่ 39/4 หมู่ 6 ตำบลสามพราน อำเภอสามพราน จังหวัดนครปฐม 73110", "mapLink": "https://www.google.com/maps?q=13.717950, 100.228837", "coords": "13.717950, 100.228837", "openDate": "2025-01-20", "status": "Active store"}, {"code": "CJX00054", "name": "วัดบางนางลี่ใหญ่", "tambon": "สวนหลวง", "amphoe": "อัมพวา", "province": "สมุทรสงคราม", "address": "บ้านเลขที่ 27  หมู่ 2 ตำบลสวนหลวง อำเภออัมพวา จังหวัดสมุทรสงคราม 75110", "mapLink": "https://www.google.com/maps?q=13.419527, 99.957717", "coords": "13.419527, 99.957717", "openDate": "2025-02-15", "status": "Active store"}, {"code": "CJX00055", "name": "โคกโคเฒ่า", "tambon": "โคกโคเฒ่า", "amphoe": "เมืองสุพรรณบุรี", "province": "สุพรรณบุรี", "address": "บ้านเลขที่ 898 หมู่ 1 ตำบลโคกโคเฒ่า อำเภอเมืองสุพรรณบุรี จังหวัดสุพรรณบุรี 72000", "mapLink": "https://www.google.com/maps?q=14.460557, 100.186013", "coords": "14.460557, 100.186013", "openDate": "2024-12-29", "status": "Active store"}, {"code": "CJX00056", "name": "วัดใหญ่ชัยมงคล", "tambon": "คลองสวนพลู", "amphoe": "พระนครศรีอยุธยา", "province": "พระนครศรีอยุธยา", "address": "บ้านเลขที่ 120/57 หมู่ 3 ตำบลคลองสวนพลู อำเภอพระนครศรีอยุธยา จังหวัดพระนครศรีอยุธยา 13000", "mapLink": "https://www.google.com/maps?q=14.343860, 100.590048", "coords": "14.343860, 100.590048", "openDate": "2025-01-29", "status": "Active store"}, {"code": "CJX00057", "name": "บางซ้าย", "tambon": "บางซ้าย", "amphoe": "บางซ้าย", "province": "พระนครศรีอยุธยา", "address": "บ้านเลขที่ 119 หมู่ 3 ตำบลบางซ้าย  อำเภอบางซ้าย จังหวัดพระนครศรีอยุธยา 13270", "mapLink": "https://www.google.com/maps?q=14.333952, 100.302541", "coords": "14.333952, 100.302541", "openDate": "2025-01-31", "status": "Active store"}, {"code": "CJX00058", "name": "ลาดชะโด", "tambon": "หนองน้ำใหญ่", "amphoe": "ผักไห่", "province": "พระนครศรีอยุธยา", "address": "บ้านเลขที่ 119 หมู่ 3 ตำบลหนองน้ำใหญ่ อำเภอผักไห่ จังหวัดพระนครศรีอยุธยา 13280", "mapLink": "https://www.google.com/maps?q=14.463126, 100.318646", "coords": "14.463126, 100.318646", "openDate": "2025-01-30", "status": "Active store"}, {"code": "CJX00059", "name": "บางกระสั้น", "tambon": "บางกระสั้น", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "บ้านเลขที่ 11/10 หมู่ 8 ตำบลบางกระสั้น อำเภอบางปะอิน จังหวัดพระนครศรีอยุธยา 13160", "mapLink": "https://www.google.com/maps?q=14.189448, 100.546274", "coords": "14.189448, 100.546274", "openDate": "2025-04-06", "status": "Active store"}, {"code": "CJX00060", "name": "สะพานไทย", "tambon": "สะพานไทย", "amphoe": "บางบาล", "province": "พระนครศรีอยุธยา", "address": "บ้านเลขที่ 22/8 หมู่ 2 ตำบลสะพานไทย อำเภอบางบาล จังหวัดพระนครศรีอยุธยา 13250", "mapLink": "https://www.google.com/maps?q=14.360142, 100.484793", "coords": "14.360142, 100.484793", "openDate": "2025-01-15", "status": "Active store"}, {"code": "CJX00061", "name": "คลองจิก", "tambon": "คลองจิก", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "บ้านเลขที่ 6/12 หมู่ 2 ตำบลคลองจิก อำเภอบางปะอิน จังหวัดพระนครศรีอยุธยา 13160", "mapLink": "https://www.google.com/maps?q=14.219674, 100.597419", "coords": "14.219674, 100.597419", "openDate": "2025-01-11", "status": "Active store"}, {"code": "CJX00062", "name": "ตลาดนัดโรงสี อุทัย", "tambon": "อุทัย", "amphoe": "อุทัย", "province": "พระนครศรีอยุธยา", "address": "บ้านเลขที่ 6/7 หมู่ 13 ตำบลอุทัย อำเภออุทัย จังหวัดพระนครศรีอยุธยา 13210", "mapLink": "https://www.google.com/maps?q=14.363094, 100.667294", "coords": "14.363094, 100.667294", "openDate": "2025-01-20", "status": "Active store"}, {"code": "CJX00063", "name": "พระอินทร์ราชา ซอย 3", "tambon": "เชียงรากน้อย", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "บ้านเลขที่ 54/50 หมู่ 7 ตำบลเชียงรากน้อย อำเภอบางปะอิน จังหวัดพระนครศรีอยุธยา 13180", "mapLink": "https://www.google.com/maps?q=14.146279, 100.616468", "coords": "14.146279, 100.616468", "openDate": "2025-01-27", "status": "Active store"}, {"code": "CJX00064", "name": "ตลาดนัดบัวศรี", "tambon": "คลองมะเดื่อ", "amphoe": "กระทุ่มแบน", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 70/7 หมู่ 6 ตำบลคลองมะเดื่อ อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74110", "mapLink": "https://www.google.com/maps?q=13.624886, 100.280659", "coords": "13.624886, 100.280659", "openDate": "2025-03-20", "status": "Active store"}, {"code": "CJX00065", "name": "วัดห้วยปลาดุก", "tambon": "หินกอง", "amphoe": "เมืองราชบุรี", "province": "ราชบุรี", "address": "บ้านเลขที่ 211 หมู่ 7 ตำบลหินกอง อำเภอเมืองราชบุรี จังหวัดราชบุรี 70000", "mapLink": "https://www.google.com/maps?q=13.546639, 99.728444", "coords": "13.546639, 99.728444", "openDate": "2025-04-23", "status": "Active store"}, {"code": "CJX00066", "name": "เอื้ออาทรศาลายา 3", "tambon": "ทรงคนอง", "amphoe": "สามพราน", "province": "นครปฐม", "address": "บ้านเลขที่ 155 หมู่ 1 ตำบลทรงคนอง อำเภอสามพราน จังหวัดนครปฐม 73210", "mapLink": "https://www.google.com/maps?q=13.802235, 100.272623", "coords": "13.802235, 100.272623", "openDate": "2025-03-10", "status": "Active store"}, {"code": "CJX00067", "name": "พุพลับ", "tambon": "ทุ่งหลวง", "amphoe": "ปากท่อ", "province": "ราชบุรี", "address": "ต.ทุ่งหลวง อ.ปากท่อ จ.ราชบุรี", "mapLink": "https://www.google.com/maps?q=13.415966, 99.677060", "coords": "13.415966, 99.677060", "openDate": null, "status": "Cancel"}, {"code": "CJX00068", "name": "ตลาดเกรียบ", "tambon": "ตลาดเกรียบ", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "บ้านเลขที่ 63/1 หมู่ 5 ตำบลตลาดเกรียบ อำเภอบางปะอิน จังหวัดพระนครศรีอยุธยา 13160", "mapLink": "https://www.google.com/maps?q=14.278108, 100.570332", "coords": "14.278108, 100.570332", "openDate": "2025-05-24", "status": "Active store"}, {"code": "CJX00069", "name": "ตะวันออกบ้านบึง", "tambon": "บ้านบึง", "amphoe": "บ้านบึง", "province": "ชลบุรี", "address": "บ้านเลขที่ 21 ถนนเทศบาลพัฒนา ตำบลบ้านบึง อำเภอบ้านบึง จังหวัดชลบุรี 20170", "mapLink": "https://www.google.com/maps?q=13.301688, 101.118997", "coords": "13.301688, 101.118997", "openDate": "2025-06-25", "status": "Active store"}, {"code": "CJX00070", "name": "บ้านสวนซอยเมรี่", "tambon": "บ้านสวน", "amphoe": "เมืองชลบุรี", "province": "ชลบุรี", "address": "บ้านเลขที่ 411/173 หมู่ 5 ตำบลบ้านสวน อำเภอเมืองชลบุรี จังหวัดชลบุรี 20000", "mapLink": "https://www.google.com/maps?q=13.359605, 100.994974", "coords": "13.359605, 100.994974", "openDate": "2025-06-26", "status": "Active store"}, {"code": "CJX00071", "name": "ศรีด่าน 22", "tambon": "บางแก้ว", "amphoe": "บางพลี", "province": "สมุทรปราการ", "address": "บ้านเลขที่ 93 หมู่ 12 ตำบลบางแก้ว อำเภอบางพลี จังหวัดสมุทรปราการ 10540", "mapLink": "https://www.google.com/maps?q=13.642761, 100.651432", "coords": "13.642761, 100.651432", "openDate": "2025-12-13", "status": "Active store"}, {"code": "CJX00072", "name": "หมู่บ้านทับทอง", "tambon": "บางเสาธง", "amphoe": "บางเสาธง", "province": "สมุทรปราการ", "address": "บ้านเลขที่ 113 หมู่ 2 ตำบลบางเสาธง อำเภอบางเสาธง จังหวัดสมุทรปราการ 10570", "mapLink": "https://www.google.com/maps?q=13.567400, 100.822903", "coords": "13.567400, 100.822903", "openDate": "2025-11-08", "status": "Active store"}, {"code": "CJX00073", "name": "ชุมชนวังน้ำขาว", "tambon": "ตลาดจินดา", "amphoe": "สามพราน", "province": "นครปฐม", "address": "บ้านเลขที่ 204 หมู่ 5 ตำบลคลองจินดา อำเภอสามพราน จังหวัดนครปฐม 73110", "mapLink": "https://www.google.com/maps?q=13.714955, 100.162217", "coords": "13.714955, 100.162217", "openDate": "2025-06-25", "status": "Active store"}, {"code": "CJX00074", "name": "ซอยบางเลน 21", "tambon": "บางเลน", "amphoe": "บางใหญ่", "province": "นนทบุรี", "address": "บ้านเลขที่ 58/57 หมู่ 10 ตำบลบางเลน อำเภอบางใหญ่ จังหวัดนนทบุรี 11140", "mapLink": "https://www.google.com/maps?q=13.843359, 100.435782", "coords": "13.843359, 100.435782", "openDate": "2025-08-09", "status": "Active store"}, {"code": "CJX00075", "name": "ตลาดพึ่งสุข", "tambon": "บึงคำพร้อย", "amphoe": "ลำลูกกา", "province": "ปทุมธานี", "address": "บ้านเลขที่ 43 หมู่ 7 ตำบลบึงคำพร้อย อำเภอลำลูกกา จังหวัดปทุมธานี 12150", "mapLink": "https://www.google.com/maps?q=13.964271, 100.738027", "coords": "13.964271, 100.738027", "openDate": "2025-09-20", "status": "Active store"}, {"code": "CJX00076", "name": "พหลโยธิน 66", "tambon": "คูคต", "amphoe": "ลำลูกกา", "province": "ปทุมธานี", "address": "บ้านเลขที่ 138/38 หมู่ 10 ตำบลคูคต อำเภอลำลูกกา จังหวัดปทุมธานี 12130", "mapLink": "https://www.google.com/maps?q=13.948128, 100.625551", "coords": "13.948128, 100.625551", "openDate": "2025-10-11", "status": "Active store"}, {"code": "CJX00077", "name": "บุญศิริ", "tambon": "บางเมือง", "amphoe": "เมืองสมุทรปราการ", "province": "สมุทรปราการ", "address": "บ้านเลขที่ 18/130 หมู่ 3 ตำบลบางเมือง อำเภอเมืองสมุทรปราการ จังหวัดสมุทรปราการ 10270", "mapLink": "https://www.google.com/maps?q=13.609334, 100.599241", "coords": "13.609334, 100.599241", "openDate": "2025-08-30", "status": "Active store"}, {"code": "CJX00078", "name": "ชุมชนศุภมงคล", "tambon": "ท่าตลาด", "amphoe": "สามพราน", "province": "นครปฐม", "address": "บ้านเลขที่ 51/312 หมู่ 2 ตำบลท่าตลาด อำเภอสามพราน จังหวัดนครปฐม 73110", "mapLink": "https://www.google.com/maps?q=13.749954, 100.218058", "coords": "13.749954, 100.218058", "openDate": "2025-08-23", "status": "Active store"}, {"code": "CJX00079", "name": "ชุมชนบ้านสิงห์", "tambon": "บ้านสิงห์", "amphoe": "โพธาราม", "province": "ราชบุรี", "address": "บ้านเลขที่ 28/4 หมู่ 4 ตำบลบ้านสิงห์ อำเภอโพธาราม จังหวัดราชบุรี 70120", "mapLink": "https://www.google.com/maps?q=13.670992, 99.879169", "coords": "13.670992, 99.879169", "openDate": "2025-09-27", "status": "Active store"}, {"code": "CJX00080", "name": "ชุมชนตะเคียนเตี้ย", "tambon": "ตะเคียนเตี้ย", "amphoe": "บางละมุง", "province": "ชลบุรี", "address": "บ้านเลขที่ 89/3 หมู่ 1 ตำบลตะเคียนเตี้ย อำเภอบางละมุง จังหวัดชลบุรี 20150", "mapLink": "https://www.google.com/maps?q=13.033011, 100.943894", "coords": "13.033011, 100.943894", "openDate": "2025-10-11", "status": "Active store"}, {"code": "CJX00081", "name": "แจ้งวัฒนะ 6", "tambon": "ตลาดบางเขน", "amphoe": "หลักสี่", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 231/47 ซอยแจ้งวัฒนะ 6 แยก 1 แขวงตลาดบางเขน เขตหลักสี่ กรุงเทพมหานคร 10210", "mapLink": "https://www.google.com/maps?q=13.883864, 100.587061", "coords": "13.883864, 100.587061", "openDate": "2025-12-13", "status": "Active store"}, {"code": "CJX00082", "name": "สุเหร่าคลองหนึ่ง", "tambon": "บางชัน", "amphoe": "คลองสามวา", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 399/6 ถนนสุเหร่าคลองหนึ่ง แขวงบางชัน เขตคลองสามวา กรุงเทพมหานคร 10510", "mapLink": "https://www.google.com/maps?q=13.842401, 100.707154", "coords": "13.842401, 100.707154", "openDate": "2025-12-24", "status": "Active store"}, {"code": "CJX00083", "name": "แปลงยาว", "tambon": "แปลงยาว", "amphoe": "แปลงยาว", "province": "ฉะเชิงเทรา", "address": "บ้านเลขที่ 63/1 หมู่ 9 ตำบลแปลงยาว อำเภอแปลงยาว จังหวัดฉะเชิงเทรา 24190", "mapLink": "https://www.google.com/maps?q=13.605877, 101.264662", "coords": "13.605877, 101.264662", "openDate": "2025-11-22", "status": "Active store"}, {"code": "CJX00084", "name": "แสนมณี อะคิระ", "tambon": "บางนาง", "amphoe": "พานทอง", "province": "ชลบุรี", "address": "บ้านเลขที่ 192 หมู่ 8 ตำบลบางนาง อำเภอพานทอง จังหวัดชลบุรี 20160", "mapLink": "https://www.google.com/maps?q=13.468528, 101.022556", "coords": "13.468528, 101.022556", "openDate": "2025-12-24", "status": "Active store"}, {"code": "CJX00085", "name": "รามอินทรา 65 แยก 2", "tambon": "ท่าแร้ง", "amphoe": "บางเขน", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 5/1 ซอยรามอินทรา 65 แยก 2 แขวงท่าแร้ง เขตบางเขน กรุงเทพมหานคร 10220", "mapLink": "https://www.google.com/maps?q=13.850327, 100.651842", "coords": "13.850327, 100.651842", "openDate": "2025-11-01", "status": "Active store"}, {"code": "CJX00086", "name": "ตลาดขนส่ง", "tambon": "ลำต้อยติ่ง", "amphoe": "หนองจอก", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 14/28 หมู่ 7 แขวงลำต้อยติ่ง เขตหนองจอก กรุงเทพมหานคร 10530", "mapLink": "https://www.google.com/maps?q=13.803417, 100.871528", "coords": "13.803417, 100.871528", "openDate": "2025-11-19", "status": "Active store"}, {"code": "CJX00087", "name": "ด่านสำโรง 42", "tambon": "สำโรงเหนือ", "amphoe": "เมืองสมุทรปราการ", "province": "สมุทรปราการ", "address": "บ้านเลขที่ 1448 หมู่ 3 ตำบลสำโรงเหนือ อำเภอเมืองสมุทรปราการ จังหวัดสมุทรปราการ 10270", "mapLink": "https://www.google.com/maps?q=13.638655, 100.614652", "coords": "13.638655, 100.614652", "openDate": "2026-02-11", "status": "Active store"}, {"code": "CJX00088", "name": "บางปู 69", "tambon": "บางปูใหม่", "amphoe": "เมืองสมุทรปราการ", "province": "สมุทรปราการ", "address": "บ้านเลขที่ 893 หมู่ที่ 7 ตำบลบางปูใหม่ อำเภอเมืองสมุทรปราการ จังหวัดสมุทรปราการ 10280", "mapLink": "https://www.google.com/maps?q=13.537331, 100.630331", "coords": "13.537331, 100.630331", "openDate": "2025-11-01", "status": "Active store"}, {"code": "CJX00089", "name": "การเคหะบ้านโพธิ์", "tambon": "คลองประเวศ", "amphoe": "บ้านโพธิ์", "province": "ฉะเชิงเทรา", "address": "บ้านเลขที่ 91/1 หมู่1 ตำบลคลองประเวศ อำเภอบ้านโพธิ์ จังหวัดฉะเชิงเทรา 24140", "mapLink": "https://www.google.com/maps?q=13.615060, 101.027956", "coords": "13.615060, 101.027956", "openDate": "2026-01-31", "status": "Active store"}, {"code": "CJX00090", "name": "ซอยรังสิต-นครนายก 13", "tambon": "ประชาธิปัตย์", "amphoe": "ธัญบุรี", "province": "ปทุมธานี", "address": "บ้านเลขที่ 69 ซอยรังสิต-นครนายก 13 ตำบลประชาธิปัตย์ อำเภอธัญบุรี จังหวัดปทุมธานี 12130", "mapLink": "https://www.google.com/maps?q=13.990704, 100.624089", "coords": "13.990704, 100.624089", "openDate": "2026-03-14", "status": "Active store"}, {"code": "CJX00091", "name": "ซอยหมอย้อย", "tambon": "สุรศักดิ์", "amphoe": "ศรีราชา", "province": "ชลบุรี", "address": "บ้านเลขที่ 323/75 หมู่ 8 ตำบลสุรศักดิ์ อำเภอศรีราชา จังหวัดชลบุรี 20110", "mapLink": "https://www.google.com/maps?q=13.146370, 100.950700", "coords": "13.146370, 100.950700", "openDate": "2025-12-10", "status": "Active store"}, {"code": "CJX00092", "name": "หมู่บ้านมิตรประชา", "tambon": "บ้านใหม่", "amphoe": "ปากเกร็ด", "province": "นนทบุรี", "address": "บ้านเลขที่ 53/1587 หมู่ 3 ตำบลบ้านใหม่ อำเภอปากเกร็ด จังหวัดนนทบุรี 11120", "mapLink": "https://www.google.com/maps?q=13.936078, 100.540305", "coords": "13.936078, 100.540305", "openDate": "2026-01-24", "status": "Active store"}, {"code": "CJX00093", "name": "บงกช 14", "tambon": "คลองสอง", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "บ้านเลขที่ 39/10 หมู่ 4 ตำบลคลองสอง อำเภอคลองหลวง จังหวัดปทุมธานี 12120", "mapLink": "https://www.google.com/maps?q=14.039844, 100.641819", "coords": "14.039844, 100.641819", "openDate": "2026-01-28", "status": "Active store"}, {"code": "CJX00094", "name": "ซอยสุภาพงษ์ 3", "tambon": "หนองบอน", "amphoe": "ประเวศ", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 133 ซอยสุภาพงษ์ 1 แขวงหนองบอน เขตประเวศ กรุงเทพมหานคร 10250", "mapLink": "https://www.google.com/maps?q=13.691989, 100.639459", "coords": "13.691989, 100.639459", "openDate": "2025-12-24", "status": "Active store"}, {"code": "CJX00095", "name": "เทศบาลวิหารแดง ซอย 5", "tambon": "วิหารแดง", "amphoe": "วิหารแดง", "province": "สระบุรี", "address": "บ้านเลขที่ 231 หมู่ 1 ตำบลเจริญธรรม อำเภอวิหารแดง จังหวัดสระบุรี 18150", "mapLink": "https://www.google.com/maps?q=14.347368, 100.990010", "coords": "14.347368, 100.990010", "openDate": "2026-03-28", "status": "Active store"}, {"code": "CJX00096", "name": "ซอยทวีวัฒนา 25", "tambon": "ทวีวัฒนา", "amphoe": "ทวีวัฒนา", "province": "กรุงเทพมหานคร", "address": "ต.ทวีวัฒนา อ.ทวีวัฒนา จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.770245, 100.332673", "coords": "13.770245, 100.332673", "openDate": null, "status": "Cancel"}, {"code": "CJX00097", "name": "ตลาดมิ่ง", "tambon": "สำโรงเหนือ", "amphoe": "เมืองสมุทรปราการ", "province": "สมุทรปราการ", "address": "บ้านเลขที่ 2048 หมู่ 9 ตำบลสำโรงเหนือ อำเภอเมืองสมุทรปราการ จังหวัดสมุทรปราการ 10270", "mapLink": "https://www.google.com/maps?q=13.656562, 100.606814", "coords": "13.656562, 100.606814", "openDate": "2026-04-29", "status": "Active store"}, {"code": "CJX00098", "name": "ตลาดอ่อนนุช 65", "tambon": "ประเวศ", "amphoe": "ประเวศ", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 100 ซอยอ่อนนุช 65 แขวงประเวศ เขตประเวศ กรุงเทพมหานคร 10250", "mapLink": "https://www.google.com/maps?q=13.725838, 100.681601", "coords": "13.725838, 100.681601", "openDate": "2026-03-14", "status": "Active store"}, {"code": "CJX00099", "name": "พุแค", "tambon": "พุแค", "amphoe": "เฉลิมพระเกียรติ", "province": "สระบุรี", "address": "บ้านเลขที่ 71/30 หมู่ 1 ตำบลพุแค อำเภอเฉลิมพระเกียรติ จังหวัดสระบุรี 18240", "mapLink": "https://www.google.com/maps?q=14.664217, 100.892942", "coords": "14.664217, 100.892942", "openDate": "2026-03-04", "status": "Active store"}, {"code": "CJX00100", "name": "ป๊อกแป๊ก", "tambon": "พุแค", "amphoe": "เมืองสระบุรี", "province": "สระบุรี", "address": "บ้านเลขที่ 163 หมู่ 2 ตำบลหนองโน อำเภอเมืองสระบุรี จังหวัดสระบุรี 18000", "mapLink": "https://www.google.com/maps?q=14.509887, 100.862326", "coords": "14.509887, 100.862326", "openDate": "2026-02-28", "status": "Active store"}, {"code": "CJX00101", "name": "บางไผ่ ซอย 17", "tambon": "พุแค", "amphoe": "เมืองนนทบุรี", "province": "นนทบุรี", "address": "บ้านเลขที่ 111/13 หมู่ 3 ตำบลบางไผ่ อำเภอเมืองนนทบุรี จังหวัดนนทบุรี 11000", "mapLink": "https://www.google.com/maps?q=13.828773, 100.492300", "coords": "13.828773, 100.492300", "openDate": "2026-04-29", "status": "Active store"}, {"code": "CJX00102", "name": "ศิริเกษม", "tambon": "บางไผ่", "amphoe": "บางแค", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 132/2 ถนนพุทธมณฑลสาย 3 แขวงบางไผ่ เขตบางแค กรุงเทพมหานคร 10160", "mapLink": "https://www.google.com/maps?q=13.737164, 100.364122", "coords": "13.737164, 100.364122", "openDate": "2026-05-09", "status": "Active store"}, {"code": "CJX00103", "name": "หน้าพระลาน", "tambon": "หน้าพระลาน", "amphoe": "เฉลิมพระเกียรติ", "province": "สระบุรี", "address": "บ้านเลขที่ 146 หมู่ 7 ตำบลหน้าพระลาน อำเภอเฉลิมพระเกียรติ จังหวัดสระบุรี 18240", "mapLink": "https://www.google.com/maps?q=14.686250, 100.868556", "coords": "14.686250, 100.868556", "openDate": "2026-02-25", "status": "Active store"}, {"code": "CJX00104", "name": "ซอยมหาชัย", "tambon": "บางพลีใหญ่", "amphoe": "บางพลี ", "province": "สมุทรปราการ", "address": "บ้านเลขที่ 77/2 หมู่ 7 ตำบลบางพลีใหญ่ อำเภอบางพลี จังหวัดสมุทรปราการ 10540", "mapLink": "https://www.google.com/maps?q=13.632278, 100.692417", "coords": "13.632278, 100.692417", "openDate": "2026-01-28", "status": "Active store"}, {"code": "CJX00105", "name": "วิเชียรโชฎก", "tambon": "ท่าจีน", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 1258/21 ถนนวิเชียรโชฎก ตำบลมหาชัย อำเภอเมืองสมุทรสาคร จังหวัดสมุทรสาคร 74000", "mapLink": "https://www.google.com/maps?q=13.534506, 100.260301", "coords": "13.534506, 100.260301", "openDate": "2026-06-27", "status": "Active store"}, {"code": "CJX00106", "name": "เคหะวัดกู้", "tambon": "บางพูด", "amphoe": "ปากเกร็ด​", "province": "นนทบุรี", "address": "บ้านเลขที่ 14/86 หมู่ 6 ตำบลบางพูด อำเภอปากเกร็ด จังหวัดนนทบุรี 11120", "mapLink": "https://www.google.com/maps?q=13.929988, 100.508027", "coords": "13.929988, 100.508027", "openDate": "2026-05-02", "status": "Active store"}, {"code": "CJX00107", "name": "ทะเลชุบศร", "tambon": "สามยอด", "amphoe": "เมืองลพบุรี", "province": "ลพบุรี", "address": "บ้านเลขที่ 92 ถนนพหลโยธิน (ช.10) ตำบลเขาสามยอด อำเภอเมืองลพบุรี จังหวัดลพบุรี 15000", "mapLink": "https://www.google.com/maps?q=14.822592, 100.648369", "coords": "14.822592, 100.648369", "openDate": "2026-02-21", "status": "Active store"}, {"code": "CJX00108", "name": "หนองปลิง", "tambon": "หนองปลิง", "amphoe": "หนองแค", "province": "สระบุรี", "address": "บ้านเลขที่ 52/1 หมู่ 8 ตำบลหนองปลิง อำเภอหนองแค จังหวัดสระบุรี 18140", "mapLink": "https://www.google.com/maps?q=14.369539, 100.830547", "coords": "14.369539, 100.830547", "openDate": "2026-03-28", "status": "Active store"}, {"code": "CJX00109", "name": "สุกัญญาปาร์ค", "tambon": "ท่าตูม", "amphoe": "ศรีมหาโพธิ", "province": "ปราจีนบุรี", "address": "บ้านเลขที่ 1219 หมู่ 7 ตำบลท่าตูม อำเภอศรีมหาโพธิ จังหวัดปราจีนบุรี 25140", "mapLink": "https://www.google.com/maps?q=13.918668, 101.560743", "coords": "13.918668, 101.560743", "openDate": "2026-03-28", "status": "Active store"}, {"code": "CJX00110", "name": "เอื้ออาทร อินทราทิตย์", "tambon": "ท่าแค", "amphoe": "เมืองลพบุรี", "province": "ลพบุรี", "address": "บ้านเลขที่ 1552 หมู่ 2 ตำบลท่าแค อำเภอเมืองลพบุรี จังหวัดลพบุรี 15000", "mapLink": "https://www.google.com/maps?q=14.848819, 100.624664", "coords": "14.848819, 100.624664", "openDate": "2026-03-25", "status": "Active store"}, {"code": "CJX00111", "name": "ตลาดท่ายาง", "tambon": "ท่าคอย", "amphoe": "ท่ายาง", "province": "เพชรบุรี", "address": "บ้านเลขที่ 184 หมู่ 1 ตำบลท่ายาง อำเภอท่ายาง จังหวัดเพชรบุรี 76130", "mapLink": "https://www.google.com/maps?q=12.972424, 99.888342", "coords": "12.972424, 99.888342", "openDate": "2026-06-27", "status": "Active store"}, {"code": "CJX00112", "name": "แม่น้ำคู้ ซอย 1", "tambon": "แม่น้ำคู้", "amphoe": "ปลวกแดง", "province": "ระยอง", "address": "บ้านเลขที่ 1026 หมู่ 5 ตำบลแม่น้ำคู้ อำเภอปลวกแดง จังหวัดระยอง 21140", "mapLink": "https://www.google.com/maps?q=12.925157, 101.244953", "coords": "12.925157, 101.244953", "openDate": "2026-05-02", "status": "Active store"}, {"code": "CJX00113", "name": "หมู่บ้านลภาวันโครงการ 10", "tambon": "บางพลับ", "amphoe": "ปากเกร็ด", "province": "นนทบุรี", "address": "บ้านเลขที่ 65/21 หมู่ 2 ตำบลบางพลับ อำเภอปากเกร็ด จังหวัดนนทบุรี 11120", "mapLink": "https://www.google.com/maps?q=13.919364, 100.437963", "coords": "13.919364, 100.437963", "openDate": "2026-06-06", "status": "Active store"}, {"code": "CJX00114", "name": "ชำผักแพว", "tambon": "ชำผักแพว", "amphoe": "แก่งคอย", "province": "สระบุรี", "address": "บ้านเลขที่ 35/2 หมู่2 ตำบลชำผักแพว อำเภอแก่งคอย จังหวัดสระบุรี 18110", "mapLink": "https://www.google.com/maps?q=14.505657, 101.021621", "coords": "14.505657, 101.021621", "openDate": "2026-06-10", "status": "Active store"}, {"code": "CJX00115", "name": "คอนโดศรีเมือง ซอย 2", "tambon": "เชิงเนิน", "amphoe": "เมืองระยอง", "province": "ระยอง", "address": "บ้านเลขที่ 52 ถนนอดุลย์ธรรมประภาส ตำบลเชิงเนิน อำเภอเมืองระยอง จังหวัดระยอง 21000", "mapLink": "https://www.google.com/maps?q=12.674625, 101.272150", "coords": "12.674625, 101.272150", "openDate": "2026-07-25", "status": "Active store"}, {"code": "CJX00116", "name": "บางขุนเทียน 14", "tambon": "แสมดำ", "amphoe": "บางขุนเทียน", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 9/1 ซอยบางขุนเทียน 14 แขวงแสมดำ เขตบางขุนเทียน กรุงเทพมหานคร 10150", "mapLink": "https://www.google.com/maps?q=13.662767, 100.427414", "coords": "13.662767, 100.427414", "openDate": "2026-06-20", "status": "Active store"}, {"code": "CJX00117", "name": "บ้านสวยน้ำใส 3", "tambon": "ท่าตูม", "amphoe": "ศรีมหาโพธิ", "province": "ปราจีนบุรี", "address": "บ้านเลขที่ 445 หมู่ 8 ตำบลท่าตูม อำเภอศรีมหาโพธิ จังหวัดปราจีนบุรี 25140", "mapLink": "https://www.google.com/maps?q=13.938214, 101.555218", "coords": "13.938214, 101.555218", "openDate": "2026-06-27", "status": "Active store"}, {"code": "CJX00118", "name": "ตลาดนัดขอนขว้าง", "tambon": "ดงขี้เหล็ก", "amphoe": "เมืองปราจีนบุรี", "province": "ปราจีนบุรี", "address": "บ้านเลขที่ 77 หมู่ 10 ตำบลดงขี้เหล็ก อำเภอเมืองปราจีนบุรี จังหวัดปราจีนบุรี 25000", "mapLink": "https://www.google.com/maps?q=14.131142, 101.441589", "coords": "14.131142, 101.441589", "openDate": "2026-04-04", "status": "Active store"}, {"code": "CJX00119", "name": "เทศบาลตำบลเสาธงหิน", "tambon": "เสาธงหิน", "amphoe": "บางใหญ่", "province": "นนทบุรี", "address": "บ้านเลขที่ 99/86 หมู่ 5 ตำบลเสาธงหิน อำเภอบางใหญ่ จังหวัดนนทบุรี 11140", "mapLink": "https://www.google.com/maps?q=13.878884, 100.397117", "coords": "13.878884, 100.397117", "openDate": "2026-05-16", "status": "Active store"}, {"code": "CJX00120", "name": "บางขุนเทียน 16", "tambon": "แสมดำ", "amphoe": "บางขุนเทียน", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 1/4 ซอยบางขุนเทียน 16 แขวงแสมดำ เขตบางขุนเทียน กรุงเทพมหานคร 10150", "mapLink": "https://www.google.com/maps?q=13.658155, 100.428989", "coords": "13.658155, 100.428989", "openDate": "2026-05-30", "status": "Active store"}, {"code": "CJX00121", "name": "ซอยบ้านท่าอิฐไทรม้า", "tambon": "ท่าอิฐ", "amphoe": "ปากเกร็ด", "province": "นนทบุรี", "address": "บ้านเลขที่ 62/84 หมู่ 5 ตำบลท่าอิฐ อำเภอปากเกร็ด จังหวัดนนทบุรี 11120", "mapLink": "https://www.google.com/maps?q=13.899368, 100.469662", "coords": "13.899368, 100.469662", "openDate": "2026-06-24", "status": "Active store"}, {"code": "CJX00122", "name": "คลองถมปราจีนบุรี", "tambon": "บางบริบูรณ์", "amphoe": "เมืองปราจีนบุรี", "province": "ปราจีนบุรี", "address": "บ้านเลขที่ 66/2 ถนนปราจีนตคาม ตำบลหน้าเมือง อำเภอเมืองปราจีนบุรี จังหวัดปราจีนบุรี 25000", "mapLink": "https://www.google.com/maps?q=14.055187, 101.377346", "coords": "14.055187, 101.377346", "openDate": "2026-05-30", "status": "Active store"}, {"code": "CJX00123", "name": "ตลาดลาภเจริญ", "tambon": "บางขุนไทร", "amphoe": "บ้านแหลม", "province": "เพชรบุรี", "address": "ต.บางขุนไทร อ.บ้านแหลม จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=13.149252, 100.026206", "coords": "13.149252, 100.026206", "openDate": "2026-09-30", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00124", "name": "สวัสดิการ 1 ซอย 2", "tambon": "หนองแขม", "amphoe": "หนองแขม", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 88/1 ถนนสวัสดิการ 1 แขวงหนองแขม เขตหนองแขม กรุงเทพมหานคร 10160", "mapLink": "https://www.google.com/maps?q=13.690728, 100.362172", "coords": "13.690728, 100.362172", "openDate": "2026-06-27", "status": "Active store"}, {"code": "CJX00125", "name": "กระทุ่มล้ม 19", "tambon": "กระทุ่มล้ม", "amphoe": "สามพราน", "province": "นครปฐม", "address": "บ้านเลขที่ 201 หมู่ 7 ตำบลกระทุ่มล้ม อำเภอสามพราน จังหวัดนครปฐม 73220", "mapLink": "https://www.google.com/maps?q=13.735329, 100.323119", "coords": "13.735329, 100.323119", "openDate": "2026-07-15", "status": "Active store"}, {"code": "CJX00126", "name": "หมู่บ้านสิรีนเฮ้าส์", "tambon": "บางรักน้อย", "amphoe": "เมืองนนทบุรี", "province": "นนทบุรี", "address": "บ้านเลขที่ 98/8 หมู่ 4 ตำบลไทรม้า  อำเภอเมืองนนทบุรี จังหวัดนนทบุรี 11000", "mapLink": "https://www.google.com/maps?q=13.868812, 100.462380", "coords": "13.868812, 100.462380", "openDate": "2026-06-24", "status": "Active store"}, {"code": "CJX00127", "name": "เคหะร่มเกล้า 31", "tambon": "คลองสองต้นนุ่น", "amphoe": "ลาดกระบัง", "province": "กรุงเทพมหานคร", "address": "ต.คลองสองต้นนุ่น อ.ลาดกระบัง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.761555, 100.730440", "coords": "13.761555, 100.730440", "openDate": "2026-08-26", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00128", "name": "ลาดพร้าว 93", "tambon": "คลองเจ้าคุณสิงห์", "amphoe": "วังทองหลาง", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 21/2 ซอยลาดพร้าว 93 (โชคชัย 3) แขวงคลองเจ้าคุณสิงห์ เขตวังทองหลาง กรุงเทพมหานคร 10310", "mapLink": "https://www.google.com/maps?q=13.781016, 100.620649", "coords": "13.781016, 100.620649", "openDate": "2026-06-17", "status": "Active store"}, {"code": "CJX00129", "name": "บูรพาพัฒน์-หาดพลา", "tambon": "บ้านฉาง", "amphoe": "บ้านฉาง", "province": "ระยอง", "address": "ต.บ้านฉาง อ.บ้านฉาง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.710008, 101.049126", "coords": "12.710008, 101.049126", "openDate": "2026-08-12", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00130", "name": "ดอนพุด", "tambon": "ดอนพุด", "amphoe": "ดอนพุด", "province": "สระบุรี", "address": "บ้านเลขที่ 172 หมู่ 2 ตำบลดอนพุด อำเภอดอนพุด จังหวัดสระบุรี 18210", "mapLink": "https://www.google.com/maps?q=14.588695, 100.624563", "coords": "14.588695, 100.624563", "openDate": "2026-07-08", "status": "Active store"}, {"code": "CJX00131", "name": "ชุมชนเพนียด", "tambon": "เพนียด", "amphoe": "โคกสำโรง", "province": "ลพบุรี", "address": "บ้านเลขที่ 16/4 หมู่ 1 ตำบลเพนียด อำเภอโคกสำโรง จังหวัดลพบุรี 15120", "mapLink": "https://www.google.com/maps?q=15.074095, 100.791106", "coords": "15.074095, 100.791106", "openDate": "2026-07-25", "status": "Active store"}, {"code": "CJX00132", "name": "รำพัน (จันทบุรี)", "tambon": "รำพัน", "amphoe": "ท่าใหม่", "province": "จันทบุรี", "address": "บ้านเลขที่ 43/2  หมู่ 1 ตำบลรำพัน อำเภอท่าใหม่ จังหวัดจันทบุรี 22120", "mapLink": "https://www.google.com/maps?q=12.642559, 101.911359", "coords": "12.642559, 101.911359", "openDate": "2026-07-08", "status": "Active store"}, {"code": "CJX00133", "name": "ตลาดนัดศาลทราย", "tambon": "คลองพลู", "amphoe": "เขาคิชฌกูฏ", "province": "จันทบุรี", "address": "ต.คลองพลู อ.เขาคิชฌกูฏ จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=12.930416, 102.044478", "coords": "12.930416, 102.044478", "openDate": "2026-09-12", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00134", "name": "ถนนแผ่นดินทอง", "tambon": "วัดใหม่", "amphoe": "เมืองจันทบุรี", "province": "จันทบุรี", "address": "ต.วัดใหม่ อ.เมืองจันทบุรี จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=12.587841, 102.094042", "coords": "12.587841, 102.094042", "openDate": "2026-10-10", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00135", "name": "บางน้ำวน", "tambon": "บ้านบ่อ", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 26/33 หมู่ 3 ตำบลบางบ่อ อำเภอเมืองสมุทรสาคร จังหวัดสมุทราสาคร 74000", "mapLink": "https://www.google.com/maps?q=13.510378, 100.181537", "coords": "13.510378, 100.181537", "openDate": "2026-07-18", "status": "Active store"}, {"code": "CJX00136", "name": "มะขามโพรง", "tambon": "พุสวรรค์", "amphoe": "แก่งกระจาน", "province": "เพชรบุรี", "address": "ต.พุสวรรค์ อ.แก่งกระจาน จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=12.985950, 99.752466", "coords": "12.985950, 99.752466", "openDate": "2026-10-03", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00137", "name": "ซอยสุพรรณ บ่อวิน", "tambon": "ปลวกแดง", "amphoe": "ปลวกแดง", "province": "ระยอง", "address": "บ้านเลขที่ 794/6 หมู่ 4 ตำบลปลวกแดง อำเภอปลวกแดง จังหวัดระยอง 21140", "mapLink": "https://www.google.com/maps?q=13.021342, 101.135683", "coords": "13.021342, 101.135683", "openDate": "2026-07-08", "status": "Active store"}, {"code": "CJX00138", "name": "ตาลกง", "tambon": "มาบปลาเค้า", "amphoe": "ท่ายาง", "province": "เพชรบุรี", "address": "ต.มาบปลาเค้า อ.ท่ายาง จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=12.992907, 99.936441", "coords": "12.992907, 99.936441", "openDate": "2026-08-22", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00139", "name": "ตลาดเมืองทอง 1", "tambon": "ทุ่งสองห้อง", "amphoe": "หลักสี่", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 9/26 ซอยแจ้งวัฒนะ 14 แขวงทุ่งสองห้อง เขตหลักสี่ กรุงเทพมหานคร 10210", "mapLink": "https://www.google.com/maps?q=13.895577, 100.561146", "coords": "13.895577, 100.561146", "openDate": "2026-07-29", "status": "Active store"}, {"code": "CJX00140", "name": "โคกขาม", "tambon": "โคกขาม", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 88/102 หมู่ 7 ตำบลโคกขาม อำเภอเมืองสมุทรสาคร จังหวัดสมุทรสาคร 74000", "mapLink": "https://www.google.com/maps?q=13.563124, 100.325124", "coords": "13.563124, 100.325124", "openDate": "2026-08-15", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00141", "name": "บ้านเกาะขวาง", "tambon": "เกาะขวาง", "amphoe": "เมืองจันทบุรี", "province": "จันทบุรี", "address": "บ้านเลขที่ 24/15 หมู่ 6 ตำบลเกาะขวาง อำเภอเมืองจันทบุรี จังหวัดจันทบุรี 22000", "mapLink": "https://www.google.com/maps?q=12.568898, 102.105524", "coords": "12.568898, 102.105524", "openDate": "2026-07-29", "status": "Active store"}, {"code": "CJX00142", "name": "ชุมชนบางควาย", "tambon": "ชะอำ", "amphoe": "ชะอำ", "province": "เพชรบุรี", "address": "บ้านเลขที่ 944 ถนนเพชรเกษม (ไทรย้อย) ตำบลชะอำ อำเภอชะอำ จังหวัดเพชรบุรี 76120", "mapLink": "https://www.google.com/maps?q=12.719050, 99.954546", "coords": "12.719050, 99.954546", "openDate": "2026-07-25", "status": "Active store"}, {"code": "CJX00143", "name": "คลอง 6 ตะวันออก 14", "tambon": "คลองหก", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "บ้านเลขที่ 32/5 หมู่ 1 ตำบลคลองหก อำเภอคลองหลวง จังหวัดปทุมธานี 12120", "mapLink": "https://www.google.com/maps?q=14.043385, 100.732530", "coords": "14.043385, 100.732530", "openDate": "2026-06-24", "status": "Active store"}, {"code": "CJX00144", "name": "ชุมชนคลองนิยมยาตรา", "tambon": "พิมพา", "amphoe": "บางปะกง", "province": "ฉะเชิงเทรา", "address": "บ้านเลขที่ 1/128 หมู่ 2 ตำบลพิมพา อำเภอบางปะกง จังหวัดฉะเชิงเทรา 24180", "mapLink": "https://www.google.com/maps?q=13.594066, 100.924865", "coords": "13.594066, 100.924865", "openDate": "2026-07-04", "status": "Active store"}, {"code": "CJX00145", "name": "โค้งพัฒนา จันทบุรี", "tambon": "หนองตาคง", "amphoe": "โป่งน้ำร้อน", "province": "จันทบุรี", "address": "บ้านเลขที่ 144/4 หมู่ 6 ตำบลหนองตาคง อำเภอโป่งน้ำร้อน จังหวัดจันทบุรี 22140", "mapLink": "https://www.google.com/maps?q=13.050022, 102.404138", "coords": "13.050022, 102.404138", "openDate": "2026-07-11", "status": "Active store"}, {"code": "CJX00146", "name": "โคกหม้อ", "tambon": "ช่องสะแก", "amphoe": "เมืองเพชรบุรี", "province": "เพชรบุรี", "address": "บ้านเลขที่ 242 หมู่ 1 ตำบลช่องสะแก อำเภอเมืมองเพชรบุรี จังหวัดเพชรบุรี 76000", "mapLink": "https://www.google.com/maps?q=13.099647, 99.963839", "coords": "13.099647, 99.963839", "openDate": "2026-07-22", "status": "Active store"}, {"code": "CJX00147", "name": "ตลาดนัดลุงพรวนหนองชุมพล", "tambon": "หนองชุมพล", "amphoe": "เขาย้อย", "province": "เพชรบุรี", "address": "บ้านเลขที่ 75/1 หมู่ 2 ตำบลหนองชุมพล อำเภอเขาย้อย จังหวัดเพชรบุรี 76140", "mapLink": "https://www.google.com/maps?q=13.287206, 99.797824", "coords": "13.287206, 99.797824", "openDate": "2026-07-18", "status": "Active store"}, {"code": "CJX00148", "name": "หมู่บ้านพลีโน (สุขสวัสดิ์ 70)", "tambon": "ทุ่งครุ", "amphoe": "ทุ่งครุ", "province": "กรุงเทพมหานคร", "address": "บ้านเลขที่ 19/4 ถนนครุใน แขวงทุ่งครุ เขตทุ่งครุ กรุงเทพมหานคร 10140", "mapLink": "https://www.google.com/maps?q=13.624650, 100.511768", "coords": "13.624650, 100.511768", "openDate": "2026-08-29", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00149", "name": "พระอินทร์-บ้านศรีทอง", "tambon": "เชียงรากน้อย", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "ต.เชียงรากน้อย อ.บางปะอิน จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.147880, 100.617877", "coords": "14.147880, 100.617877", "openDate": "2026-10-31", "status": "Chk#2 (เซ็นต์สัญญาเช่า)"}, {"code": "CJX00150", "name": "ชุมชนวัดธรรมนาวา", "tambon": "เชียงรากน้อย", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "บ้านเลขที่ 46/2 หมู่ 12 ตำบลเชียงรากน้อย อำเภอบางปะอิน จังหวัดพระนครศรีอยุธยา 13180", "mapLink": "https://www.google.com/maps?q=14.136469, 100.604495", "coords": "14.136469, 100.604495", "openDate": "2026-07-11", "status": "Active store"}, {"code": "CJX00151", "name": "หมู่บ้านเติมรัก (ถนนลาดปลาดุก)", "tambon": "บางคูรัด", "amphoe": "บางบัวทอง", "province": "นนทบุรี", "address": "บ้านเลขที่ 100 หมู่ 4 ตำบลบางคูรัด อำเภอบางบัวทอง จังหวัดนนทบุรี 11110", "mapLink": "https://www.google.com/maps?q=13.914194, 100.364806", "coords": "13.914194, 100.364806", "openDate": "2026-07-25", "status": "Active store"}, {"code": "CJX00152", "name": "ห้วยกรด", "tambon": "ห้วยกรด", "amphoe": "สรรคบุรี", "province": "ชัยนาท", "address": "บ้านเลขที่ 88/4 หมู่ 9 ตำบลห้วยกรด อำเภอสรรคบุรี จังหวัดชัยนาท 17140", "mapLink": "https://www.google.com/maps?q=15.094044, 100.203695", "coords": "15.094044, 100.203695", "openDate": "2026-08-05", "status": "Set up ร้าน"}, {"code": "CJX00153", "name": "ชุมชนลาดน้ำเค็ม", "tambon": "ลาดน้ำเค็ม", "amphoe": "ผักไห่", "province": "พระนครศรีอยุธยา", "address": "ต.ลาดน้ำเค็ม อ.ผักไห่ จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.486740, 100.392834", "coords": "14.486740, 100.392834", "openDate": "2026-08-15", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00154", "name": "วัดหลักสี่ราษฎร์สโมสร", "tambon": "ยกกระบัตร", "amphoe": "บ้านแพ้ว", "province": "สมุทรสาคร", "address": "บ้านเลขที่ 16/2 หมู่ 2 ตำบลยกกระบัตร อำเภอบ้านแพ้ว จังหวัดสมุทรสาคร 74120", "mapLink": "https://www.google.com/maps?q=13.574345, 100.080004", "coords": "13.574345, 100.080004", "openDate": "2026-07-15", "status": "Active store"}, {"code": "CJX00155", "name": "หมู่บ้านวิวาเรี่ยม พุทธบูชา 36", "tambon": "บางมด", "amphoe": "ทุ่งครุ", "province": "กรุงเทพมหานคร", "address": "ต.บางมด อ.ทุ่งครุ จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.638236, 100.477714", "coords": "13.638236, 100.477714", "openDate": "2026-11-28", "status": "Chk#2 (เซ็นต์สัญญาเช่า)"}, {"code": "CJX00156", "name": "แก่งดินสอ นาดี", "tambon": "แก่งดินสอ", "amphoe": "นาดี", "province": "ปราจีนบุรี", "address": "ต.แก่งดินสอ อ.นาดี จ.ปราจีนบุรี", "mapLink": "https://www.google.com/maps?q=14.079864, 101.950016", "coords": "14.079864, 101.950016", "openDate": "2026-09-09", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00157", "name": "หนองยาว", "tambon": "หนองยาว", "amphoe": "พนมสารคาม", "province": "ฉะเชิงเทรา", "address": "ต.หนองยาว อ.พนมสารคาม จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.801824, 101.360670", "coords": "13.801824, 101.360670", "openDate": "2026-08-19", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00158", "name": "ถนนจรัญยานนท์", "tambon": "บางสมัคร", "amphoe": "บางปะกง", "province": "ฉะเชิงเทรา", "address": "บ้านเลขที่ 119/4 หมู่ 3 ตำบลบางสมัคร อำเภอบางปะกง จังหวัดฉะเชิงเทรา 24180", "mapLink": "https://www.google.com/maps?q=13.536743, 100.951636", "coords": "13.536743, 100.951636", "openDate": "2026-08-12", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00159", "name": "ท่าน้ำบ้านไร่", "tambon": "พันท้ายนรสิงห์", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "ต.พันท้ายนรสิงห์ อ.เมืองสมุทรสาคร จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.585804, 100.360472", "coords": "13.585804, 100.360472", "openDate": "2026-09-26", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00160", "name": "เหมราช-หนองปลาหมอ", "tambon": "หนองปลาหมอ", "amphoe": "หนองแค", "province": "สระบุรี", "address": "บ้านเลขที่ 60/33 หมู่ 4 ตำบลหนองปลาหมอ อำเภอหนองแค จังหวัดสระบุรี 18140", "mapLink": "https://www.google.com/maps?q=14.386153, 100.858274", "coords": "14.386153, 100.858274", "openDate": "2026-07-29", "status": "Active store"}, {"code": "CJX00161", "name": "สามผาน", "tambon": "สองพี่น้อง", "amphoe": "ท่าใหม่", "province": "จันทบุรี", "address": "ต.สองพี่น้อง อ.ท่าใหม่ จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=12.672167, 101.988528", "coords": "12.672167, 101.988528", "openDate": "2026-09-19", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00162", "name": "หน้าโรงงานซันฟู้ด", "tambon": "คำพราน", "amphoe": "วังม่วง", "province": "สระบุรี", "address": "ต.คำพราน อ.วังม่วง จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.796816, 101.118474", "coords": "14.796816, 101.118474", "openDate": "2026-08-15", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00163", "name": "ชุมชนไผ่ต่ำ", "tambon": "ไผ่ต่ำ", "amphoe": "หนองแค", "province": "สระบุรี", "address": "ต.ไผ่ต่ำ อ.หนองแค จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.328976, 100.837987", "coords": "14.328976, 100.837987", "openDate": "2026-08-08", "status": "Set up ร้าน"}, {"code": "CJX00164", "name": "ตลาดวังม่วง", "tambon": "วังม่วง", "amphoe": "วังม่วง", "province": "สระบุรี", "address": "ต.วังม่วง อ.วังม่วง จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.842128, 101.125039", "coords": "14.842128, 101.125039", "openDate": null, "status": "Prospect"}, {"code": "CJX00165", "name": "ชุมชนแหลมมะขาม", "tambon": "ทับมา", "amphoe": "เมืองระยอง", "province": "ระยอง", "address": "ต.ทับมา อ.เมืองระยอง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.695226, 101.229401", "coords": "12.695226, 101.229401", "openDate": "2026-08-26", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00166", "name": "ลาดพร้าว 101 ซอย 38", "tambon": "คลองจั่น", "amphoe": "บางกะปิ", "province": "กรุงเทพมหานคร", "address": "ต.คลองจั่น อ.บางกะปิ จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.786493, 100.630770", "coords": "13.786493, 100.630770", "openDate": "2026-09-23", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00167", "name": "บางปูนคร", "tambon": "บางปูใหม่", "amphoe": "เมืองสมุทรปราการ", "province": "สมุทรปราการ", "address": "ต.บางปูใหม่ อ.เมืองสมุทรปราการ จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.531092, 100.633606", "coords": "13.531092, 100.633606", "openDate": "2026-09-30", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00168", "name": "บ้านอำแพง", "tambon": "อำแพง", "amphoe": "บ้านแพ้ว", "province": "สมุทรสาคร", "address": "ต.อำแพง อ.บ้านแพ้ว จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.610520, 100.211132", "coords": "13.610520, 100.211132", "openDate": "2026-09-23", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00169", "name": "สวนราชานุสรณ์", "tambon": "ท่าหิน", "amphoe": "เมืองลพบุรี", "province": "ลพบุรี", "address": "ต.ท่าหิน อ.เมืองลพบุรี จ.ลพบุรี", "mapLink": "https://www.google.com/maps?q=14.800096, 100.614582", "coords": "14.800096, 100.614582", "openDate": "2026-10-14", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00170", "name": "หมู่บ้านสิรารมย์", "tambon": "บางปะกง", "amphoe": "บางปะกง", "province": "ฉะเชิงเทรา", "address": "บ้านเลขที่ 111/53 หมู่ 2 ตำบลบางสมัคร อำเภอบางปะกง จังหวัดฉะเชิงเทรา 24180", "mapLink": "https://www.google.com/maps?q=13.543251, 100.958374", "coords": "13.543251, 100.958374", "openDate": "2026-08-12", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00171", "name": "ตลาด 304 พลาซ่า", "tambon": "ท่าตูม", "amphoe": "ศรีมหาโพธิ", "province": "ปราจีนบุรี", "address": "บ้้านเลขที่ 800 หมู่ 10 ตำบลท่าตูม อำเภอศรีมหาโพธิ จังหวัดปราจีนบุรี 25140", "mapLink": "https://www.google.com/maps?q=13.916696, 101.575140", "coords": "13.916696, 101.575140", "openDate": "2026-08-19", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00172", "name": "ตลาดร่วมใจแปลงยาว", "tambon": "แปลงยาว", "amphoe": "แปลงยาว", "province": "ฉะเชิงเทรา", "address": "ต.แปลงยาว อ.แปลงยาว จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.586434, 101.289756", "coords": "13.586434, 101.289756", "openDate": "2026-08-15", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00173", "name": "แยกโคกหม้อ", "tambon": "ปากแรต", "amphoe": "บ้านโป่ง", "province": "ราชบุรี", "address": "บ้านเลขที่ 28/4 ถนนบ้านดอนตูม ตำบลบ้านโป่ง อำเภอบ้านโป่ง จังหวัดราชบุรี 70110", "mapLink": "https://www.google.com/maps?q=13.817151, 99.892929", "coords": "13.817151, 99.892929", "openDate": "2026-08-05", "status": "Set up ร้าน"}, {"code": "CJX00174", "name": "ถนนเลียบคลองห้าตะวันออก", "tambon": "บึงคำพร้อย", "amphoe": "ลำลูกกา", "province": "ปทุมธานี", "address": "ต.บึงคำพร้อย อ.ลำลูกกา จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.937417, 100.706333", "coords": "13.937417, 100.706333", "openDate": "2026-08-08", "status": "Set up ร้าน"}, {"code": "CJX00175", "name": "หมู่บ้าน เคซี การ์เด้นโฮม", "tambon": "สามวาตะวันออก", "amphoe": "คลองสามวา", "province": "กรุงเทพมหานคร", "address": "ต.สามวาตะวันออก อ.คลองสามวา จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.890775, 100.755037", "coords": "13.890775, 100.755037", "openDate": "2026-08-26", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00176", "name": "สามง่ามท่าโบสถ์", "tambon": "สามง่ามท่าโบสถ์", "amphoe": "หันคา", "province": "ชัยนาท", "address": "ต.สามง่ามท่าโบสถ์ อ.หันคา จ.ชัยนาท", "mapLink": "https://www.google.com/maps?q=15.059612, 100.004610", "coords": "15.059612, 100.004610", "openDate": "2026-09-05", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00177", "name": "ชุมชนสินทิวาธานี", "tambon": "สามเรือน", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "ต.สามเรือน อ.บางปะอิน จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.309638, 100.635529", "coords": "14.309638, 100.635529", "openDate": "2026-08-26", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00178", "name": "คลองหลวง 8", "tambon": "คลองหนึ่ง", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "ต.คลองหนึ่ง อ.คลองหลวง จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.007689, 100.619683", "coords": "14.007689, 100.619683", "openDate": "2026-09-23", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00179", "name": "งามเขตต์", "tambon": "ธนู", "amphoe": "อุทัย", "province": "พระนครศรีอยุธยา", "address": "ต.ธนู อ.อุทัย จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.356206, 100.607927", "coords": "14.356206, 100.607927", "openDate": "2026-10-17", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00180", "name": "พระยาสุเรนทร์ 30", "tambon": "บางชัน", "amphoe": "คลองสามวา", "province": "กรุงเทพมหานคร", "address": "ต.บางชัน อ.คลองสามวา จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.835390, 100.705340", "coords": "13.835390, 100.705340", "openDate": "2026-10-03", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00181", "name": "ชุมชนบ้านบำรุงธรรม", "tambon": "ชะอม", "amphoe": "แก่งคอย", "province": "สระบุรี", "address": "บ้านเลขที่ 3 หมู่ 2 ตำบลชะอม อำเภอแก่งคอย จังหวัดสระบุรี 18110", "mapLink": "https://www.google.com/maps?q=14.407806, 101.105082", "coords": "14.407806, 101.105082", "openDate": "2026-08-08", "status": "Set up ร้าน"}, {"code": "CJX00182", "name": "ทล.331-แปลงยาว", "tambon": "แปลงยาว", "amphoe": "แปลงยาว", "province": "ฉะเชิงเทรา", "address": "ต.แปลงยาว อ.แปลงยาว จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.591859, 101.295092", "coords": "13.591859, 101.295092", "openDate": "2026-08-15", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00183", "name": "หนองโรง", "tambon": "เขากระปุก", "amphoe": "ท่ายาง", "province": "เพชรบุรี", "address": "ต.เขากระปุก อ.ท่ายาง จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=12.743824, 99.793414", "coords": "12.743824, 99.793414", "openDate": "2026-10-10", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00184", "name": "ถนนจอมพล", "tambon": "ชะอำ", "amphoe": "ชะอำ", "province": "เพชรบุรี", "address": "ต.ชะอำ อ.ชะอำ จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=12.668976, 99.925165", "coords": "12.668976, 99.925165", "openDate": null, "status": "Prospect"}, {"code": "CJX00185", "name": "ร.พ. ท่ายาง", "tambon": "ท่ายาง", "amphoe": "ท่ายาง", "province": "เพชรบุรี", "address": "ต.ท่ายาง อ.ท่ายาง จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=12.966468, 99.891818", "coords": "12.966468, 99.891818", "openDate": "2026-10-10", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00186", "name": "ประณีต", "tambon": "ประณีต", "amphoe": "เขาสมิง", "province": "ตราด", "address": "ต.ประณีต อ.เขาสมิง จ.ตราด", "mapLink": "https://www.google.com/maps?q=12.516883, 102.372236", "coords": "12.516883, 102.372236", "openDate": "2026-10-24", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00187", "name": "ลาดพร้าว 126", "tambon": "พลับพลา", "amphoe": "วังทองหลาง", "province": "กรุงเทพมหานคร", "address": "ต.พลับพลา อ.วังทองหลาง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.771245, 100.626534", "coords": "13.771245, 100.626534", "openDate": "2026-09-26", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00188", "name": "เขายายดา", "tambon": "ตะพง", "amphoe": "เมืองระยอง", "province": "ระยอง", "address": "ต.ตะพง อ.เมืองระยอง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.654067, 101.365751", "coords": "12.654067, 101.365751", "openDate": "2026-09-19", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00189", "name": "ชุมชนวัดสุทธิรุจิราราม", "tambon": "บ้านกรด", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "ต.บ้านกรด อ.บางปะอิน จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.315629, 100.597721", "coords": "14.315629, 100.597721", "openDate": "2026-10-31", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00190", "name": "ถนนเลียบคลองเปรมประชากร", "tambon": "เชียงรากน้อย", "amphoe": "สามโคก", "province": "ปทุมธานี", "address": "ต.เชียงรากน้อย อ.สามโคก จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.111337, 100.582202", "coords": "14.111337, 100.582202", "openDate": "2026-09-30", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00191", "name": "แยกวังท่าช้าง", "tambon": "วังท่าช้าง", "amphoe": "กบินทร์บุรี", "province": "ปราจีนบุรี", "address": "ต.วังท่าช้าง อ.กบินทร์บุรี จ.ปราจีนบุรี", "mapLink": "https://www.google.com/maps?q=13.776167, 101.891889", "coords": "13.776167, 101.891889", "openDate": "2026-09-16", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00192", "name": "ถนนประชาสำราญ", "tambon": "คลองสิบสอง", "amphoe": "หนองจอก", "province": "กรุงเทพมหานคร", "address": "ต.คลองสิบสอง อ.หนองจอก จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.907094, 100.862985", "coords": "13.907094, 100.862985", "openDate": null, "status": "Prospect"}, {"code": "CJX00193", "name": "แยกคลองโคน", "tambon": "คลองโคน", "amphoe": "เมืองสมุทรสงคราม", "province": "สมุทรสงคราม", "address": "ต.คลองโคน อ.เมืองสมุทรสงคราม จ.สมุทรสงคราม", "mapLink": "https://www.google.com/maps?q=13.355142, 99.935655", "coords": "13.355142, 99.935655", "openDate": "2026-09-30", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00194", "name": "แยกวังคา-ท่าชุมพล", "tambon": "ท่าชุมพล", "amphoe": "โพธาราม", "province": "ราชบุรี", "address": "ต.ท่าชุมพล อ.โพธาราม จ.ราชบุรี", "mapLink": "https://www.google.com/maps?q=13.692292, 99.823424", "coords": "13.692292, 99.823424", "openDate": "2026-10-21", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00195", "name": "บ้านกุ่ม 2", "tambon": "บ้านกุ่ม", "amphoe": "เมืองเพชรบุรี", "province": "เพชรบุรี", "address": "ต.บ้านกุ่ม อ.เมืองเพชรบุรี จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=13.128210, 99.948863", "coords": "13.128210, 99.948863", "openDate": "2026-10-21", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00196", "name": "หมู่บ้านศศิธร (หนองปลาหมอ)", "tambon": "หนองปลาหมอ", "amphoe": "หนองแค", "province": "สระบุรี", "address": "ต.หนองปลาหมอ อ.หนองแค จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.361771, 100.852325", "coords": "14.361771, 100.852325", "openDate": "2026-10-10", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00197", "name": "ชุมชนพายทอง ป่าโมก", "tambon": "บางปลากด", "amphoe": "ป่าโมก", "province": "อ่างทอง", "address": "ต.บางปลากด อ.ป่าโมก จ.อ่างทอง", "mapLink": "https://www.google.com/maps?q=14.504474, 100.462866", "coords": "14.504474, 100.462866", "openDate": null, "status": "Prospect"}, {"code": "CJX00198", "name": "ตลาดใหม่พันเสด็จใน", "tambon": "บ่อวิน", "amphoe": "ศรีราชา", "province": "ชลบุรี", "address": "ต.บ่อวิน อ.ศรีราชา จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.057046, 101.109329", "coords": "13.057046, 101.109329", "openDate": "2026-10-31", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00199", "name": "ดงละคร-มณีวงศ์ (นครนายก)", "tambon": "ดงละคร", "amphoe": "เมืองนครนายก", "province": "นครนายก", "address": "ต.ดงละคร อ.เมืองนครนายก จ.นครนายก", "mapLink": "https://www.google.com/maps?q=14.154048, 101.187894", "coords": "14.154048, 101.187894", "openDate": "2026-10-28", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00200", "name": "ชุมชนสังฆราชา", "tambon": "ลาดกระบัง", "amphoe": "ลาดกระบัง", "province": "กรุงเทพมหานคร", "address": "ต.ลาดกระบัง อ.ลาดกระบัง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.725605, 100.736540", "coords": "13.725605, 100.736540", "openDate": "2026-10-14", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00201", "name": "บ้านพุพลับ", "tambon": "ทุ่งหลวง", "amphoe": "ปากท่อ", "province": "ราชบุรี", "address": "ต.ทุ่งหลวง อ.ปากท่อ จ.ราชบุรี", "mapLink": "https://www.google.com/maps?q=13.415907, 99.677078", "coords": "13.415907, 99.677078", "openDate": "2026-10-07", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00202", "name": "หมู่บ้านร่มเงาไม้", "tambon": "บางคูรัด", "amphoe": "บางบัวทอง", "province": "นนทบุรี", "address": "ต.บางคูรัด อ.บางบัวทอง จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.909540, 100.343413", "coords": "13.909540, 100.343413", "openDate": "2026-08-29", "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "CJX00203", "name": "ติวานนท์ 3", "tambon": "ตลาดขวัญ", "amphoe": "เมืองนนทบุรี", "province": "นนทบุรี", "address": "ต.ตลาดขวัญ อ.เมืองนนทบุรี จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.849645, 100.513007", "coords": "13.849645, 100.513007", "openDate": "2026-10-14", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00204", "name": "บ้านรัฐเอื้อราษฎร์ สาย 4", "tambon": "หนองค้างพลู", "amphoe": "หนองแขม", "province": "กรุงเทพมหานคร", "address": "ต.หนองค้างพลู อ.หนองแขม จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.735060, 100.341185", "coords": "13.735060, 100.341185", "openDate": "2026-11-25", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00205", "name": "ตลาดนัดหัวกุญแจ", "tambon": "คลองกิ่ว", "amphoe": "บ้านบึง", "province": "ชลบุรี", "address": "ต.คลองกิ่ว อ.บ้านบึง จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.247285, 101.148474", "coords": "13.247285, 101.148474", "openDate": "2026-10-03", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00206", "name": "พฤกษา-เกาะเกรียง", "tambon": "บางคูวัด", "amphoe": "เมืองปทุมธานี", "province": "ปทุมธานี", "address": "ต.บางคูวัด อ.เมืองปทุมธานี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.941575, 100.500550", "coords": "13.941575, 100.500550", "openDate": "2026-10-03", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00207", "name": "ชุมชนสุคันธาราม", "tambon": "บ้านหว้า", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "ต.บ้านหว้า อ.บางปะอิน จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.239756, 100.619180", "coords": "14.239756, 100.619180", "openDate": "2026-10-28", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00208", "name": "ชุมชนสมเด็จพระวันรัต-สามชุก", "tambon": "สามชุก", "amphoe": "สามชุก", "province": "สุพรรณบุรี", "address": "ต.สามชุก อ.สามชุก จ.สุพรรณบุรี", "mapLink": "https://www.google.com/maps?q=14.757576, 100.091023", "coords": "14.757576, 100.091023", "openDate": null, "status": "Prospect"}, {"code": "CJX00209", "name": "ชุมชนมารวิชัย", "tambon": "มารวิชัย", "amphoe": "เสนา", "province": "พระนครศรีอยุธยา", "address": "ต.มารวิชัย อ.เสนา จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.284608, 100.420372", "coords": "14.284608, 100.420372", "openDate": null, "status": "Prospect"}, {"code": "CJX00210", "name": "คลองหลวง 21", "tambon": "คลองหนึ่ง", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "ต.คลองหนึ่ง อ.คลองหลวง จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.028669, 100.614834", "coords": "14.028669, 100.614834", "openDate": "2026-10-31", "status": "Prospect"}, {"code": "CJX00211", "name": "ตลาดเกียรติปรุง บ้านนา", "tambon": "บ้านนา", "amphoe": "บ้านนา", "province": "นครนายก", "address": "ต.บ้านนา อ.บ้านนา จ.นครนายก", "mapLink": "https://www.google.com/maps?q=14.259920, 101.068847", "coords": "14.259920, 101.068847", "openDate": "2026-10-28", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00212", "name": "ราชพฤกษ์-เลียบคลองเกาะเกรียง", "tambon": "คลองพระอุดม", "amphoe": "ลาดหลุมแก้ว", "province": "ปทุมธานี", "address": "ต.คลองพระอุดม อ.ลาดหลุมแก้ว จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.979970, 100.467283", "coords": "13.979970, 100.467283", "openDate": "2026-10-28", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00213", "name": "คลองใหญ่ แหลมงอบ", "tambon": "คลองใหญ่", "amphoe": "แหลมงอบ", "province": "ตราด", "address": "ต.คลองใหญ่ อ.แหลมงอบ จ.ตราด", "mapLink": "https://www.google.com/maps?q=12.188207, 102.385181", "coords": "12.188207, 102.385181", "openDate": "2026-10-17", "status": "Prospect"}, {"code": "CJX00214", "name": "นิคมพัฒนา ซอย 3", "tambon": "นิคมพัฒนา", "amphoe": "นิคมพัฒนา", "province": "ระยอง", "address": "ต.นิคมพัฒนา อ.นิคมพัฒนา จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.845374, 101.177489", "coords": "12.845374, 101.177489", "openDate": null, "status": "Prospect"}, {"code": "CJX00215", "name": "ลำลูกกาคลอง 14", "tambon": "พืชอุดม", "amphoe": "ลำลูกกา", "province": "ปทุมธานี", "address": "ต.พืชอุดม อ.ลำลูกกา จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.964596, 100.911429", "coords": "13.964596, 100.911429", "openDate": "2026-10-28", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "CJX00216", "name": "คลองหกวา(ดอนฉิมพลี)", "tambon": "พระอาจารย์", "amphoe": "องครักษ์", "province": "นครนายก", "address": "ต.พระอาจารย์ อ.องครักษ์ จ.นครนายก", "mapLink": "https://www.google.com/maps?q=13.971959, 100.965795", "coords": "13.971959, 100.965795", "openDate": "2026-10-31", "status": "Chk#2 (เซ็นต์สัญญาเช่า)"}, {"code": "CJX00217", "name": "ซอยคลองหนองบัว", "tambon": "บางนาใต้", "amphoe": "บางนา", "province": "กรุงเทพมหานคร", "address": "ต.บางนาใต้ อ.บางนา จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.654848, 100.648299", "coords": "13.654848, 100.648299", "openDate": "2026-10-17", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "กานดา ไอลีฟ", "tambon": "แสมดำ", "amphoe": "บางขุนเทียน", "province": "กรุงเทพมหานคร", "address": "ต.แสมดำ อ.บางขุนเทียน จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.579117, 100.388537", "coords": "13.579117, 100.388537", "openDate": "2026-10-14", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "คณาสิริ ลำลูกกาคลอง 2", "tambon": "คูคต", "amphoe": "ลำลูกกา", "province": "ปทุมธานี", "address": "ต.คูคต อ.ลำลูกกา จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.967889, 100.661583", "coords": "13.967889, 100.661583", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "คลองตาคล้าย", "tambon": "ไทรน้อย", "amphoe": "ไทรน้อย", "province": "นนทบุรี", "address": "ต.ไทรน้อย อ.ไทรน้อย จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.965342, 100.349984", "coords": "13.965342, 100.349984", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "คลองน้ำหู", "tambon": "เนินพระ", "amphoe": "เมืองระยอง", "province": "ระยอง", "address": "ต.เนินพระ อ.เมืองระยอง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.684659, 101.186877", "coords": "12.684659, 101.186877", "openDate": "2026-09-30", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "คลองหกตะวันตก 57", "tambon": "คลองหก", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "ต.คลองหก อ.คลองหลวง จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.128667, 100.731306", "coords": "14.128667, 100.731306", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "คลองห้า (ตะวันออก 26)", "tambon": "คลองห้า", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "ต.คลองห้า อ.คลองหลวง จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.093346, 100.710500", "coords": "14.093346, 100.710500", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "คู้บอน", "tambon": "คันนายาว", "amphoe": "คันนายาว", "province": "กรุงเทพมหานคร", "address": "ต.คันนายาว อ.คันนายาว จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.843414, 100.662695", "coords": "13.843414, 100.662695", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "จอมทอง 14", "tambon": "บางค้อ", "amphoe": "จอมทอง", "province": "กรุงเทพมหานคร", "address": "ต.บางค้อ อ.จอมทอง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.701087, 100.473280", "coords": "13.701087, 100.473280", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "จามจุรี", "tambon": "นครนายก", "amphoe": "เมืองนครนายก", "province": "นครนายก", "address": "ต.นครนายก อ.เมืองนครนายก จ.นครนายก", "mapLink": "https://www.google.com/maps?q=14.197828, 101.216061", "coords": "14.197828, 101.216061", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ฉลองกรุง 29", "tambon": "ลำปลาทิว", "amphoe": "ลาดกระบัง", "province": "กรุงเทพมหานคร", "address": "ต.ลำปลาทิว อ.ลาดกระบัง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.757150, 100.789804", "coords": "13.757150, 100.789804", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ชุมชนข้าวเม่า", "tambon": "ข้าวเม่า", "amphoe": "อุทัย", "province": "พระนครศรีอยุธยา", "address": "ต.ข้าวเม่า อ.อุทัย จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.359943, 100.617096", "coords": "14.359943, 100.617096", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ชุมชนท้ายเมือง", "tambon": "พงสวาย", "amphoe": "เมืองราชบุรี", "province": "ราชบุรี", "address": "ต.พงสวาย อ.เมืองราชบุรี จ.ราชบุรี", "mapLink": "https://www.google.com/maps?q=13.543932, 99.829588", "coords": "13.543932, 99.829588", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ชุมชนนิเวศน์", "tambon": "ดอนกำยาน", "amphoe": "เมืองสุพรรณบุรี", "province": "สุพรรณบุรี", "address": "ต.ดอนกำยาน อ.เมืองสุพรรณบุรี จ.สุพรรณบุรี", "mapLink": "https://www.google.com/maps?q=14.443761, 100.075973", "coords": "14.443761, 100.075973", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "ชุมชนบางโฉมศรี", "tambon": "ชีน้ำร้าย", "amphoe": "อินทร์บุรี", "province": "สิงห์บุรี", "address": "ต.ชีน้ำร้าย อ.อินทร์บุรี จ.สิงห์บุรี", "mapLink": "https://www.google.com/maps?q=15.053033, 100.321410", "coords": "15.053033, 100.321410", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ชุมชนมาบข่า", "tambon": "มาบข่า", "amphoe": "นิคมพัฒนา", "province": "ระยอง", "address": "ต.มาบข่า อ.นิคมพัฒนา จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.783291, 101.192391", "coords": "12.783291, 101.192391", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ชุมชนรั้วใหญ่", "tambon": "รั้วใหญ่", "amphoe": "เมืองสุพรรณบุรี", "province": "สุพรรณบุรี", "address": "ต.รั้วใหญ่ อ.เมืองสุพรรณบุรี จ.สุพรรณบุรี", "mapLink": "https://www.google.com/maps?q=14.484966, 100.114088", "coords": "14.484966, 100.114088", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ชุมชนร่วมพัฒนา", "tambon": "เชิงเนิน", "amphoe": "เมืองระยอง", "province": "ระยอง", "address": "ต.เชิงเนิน อ.เมืองระยอง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.704288, 101.171353", "coords": "12.704288, 101.171353", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ชุมชนลาดน้ำเค็ม ยกเลิก", "tambon": "ลาดน้ำเค็ม", "amphoe": "ผักไห่", "province": "พระนครศรีอยุธยา", "address": "ต.ลาดน้ำเค็ม อ.ผักไห่ จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.486456, 100.392594", "coords": "14.486456, 100.392594", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "ชุมชนวัดบางแขม", "tambon": "บางแขม", "amphoe": "เมืองนครปฐม", "province": "นครปฐม", "address": "ต.บางแขม อ.เมืองนครปฐม จ.นครปฐม", "mapLink": "https://www.google.com/maps?q=13.772173, 100.030017", "coords": "13.772173, 100.030017", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "ชุมชนศรีมหาโพธิ์", "tambon": "ศรีมหาโพธิ์", "amphoe": "นครชัยศรี", "province": "นครปฐม", "address": "ต.ศรีมหาโพธิ์ อ.นครชัยศรี จ.นครปฐม", "mapLink": "https://www.google.com/maps?q=13.866717, 100.168811", "coords": "13.866717, 100.168811", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "ชุมชนหนองหว้า", "tambon": "บึง", "amphoe": "ศรีราชา", "province": "ชลบุรี", "address": "ต.บึง อ.ศรีราชา จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.073472, 101.010778", "coords": "13.073472, 101.010778", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ชุมชนหมู่บ้านเนียมกล่ำสามัคคี", "tambon": "จรเข้บัว", "amphoe": "ลาดพร้าว", "province": "กรุงเทพมหานคร", "address": "ต.จรเข้บัว อ.ลาดพร้าว จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.843723, 100.619134", "coords": "13.843723, 100.619134", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ชุมชนหลุบเลา", "tambon": "แก่งคอย", "amphoe": "แก่งคอย", "province": "สระบุรี", "address": "ต.แก่งคอย อ.แก่งคอย จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.570168, 100.966527", "coords": "14.570168, 100.966527", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซ.คลองสี่ ตะวันออก 54", "tambon": "คลองสี่", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "ต.คลองสี่ อ.คลองหลวง จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.104083, 100.687167", "coords": "14.104083, 100.687167", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอย หมู่บ้านสินพัฒนาธานี", "tambon": "ทวีวัฒนา", "amphoe": "ทวีวัฒนา", "province": "กรุงเทพมหานคร", "address": "ต.ทวีวัฒนา อ.ทวีวัฒนา จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.742594, 100.346384", "coords": "13.742594, 100.346384", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอย เลียบคลองสอง 27", "tambon": "บางชัน", "amphoe": "คลองสามวา", "province": "กรุงเทพมหานคร", "address": "ต.บางชัน อ.คลองสามวา จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.861694, 100.716861", "coords": "13.861694, 100.716861", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอยกลางทุ่ง (ระยอง)", "tambon": "เนินพระ", "amphoe": "เมืองระยอง", "province": "ระยอง", "address": "ต.เนินพระ อ.เมืองระยอง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.677430, 101.207393", "coords": "12.677430, 101.207393", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอยคูขวาง 11", "tambon": "คูขวาง", "amphoe": "ลาดหลุมแก้ว", "province": "ปทุมธานี", "address": "ต.คูขวาง อ.ลาดหลุมแก้ว จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.086247, 100.448859", "coords": "14.086247, 100.448859", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอยคูขวางไทย", "tambon": "คูบางหลวง", "amphoe": "ลาดหลุมแก้ว", "province": "ปทุมธานี", "address": "ต.คูบางหลวง อ.ลาดหลุมแก้ว จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.042399, 100.476251", "coords": "14.042399, 100.476251", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอยชัยพฤกษ์ 27", "tambon": "ตลิ่งชัน", "amphoe": "ตลิ่งชัน", "province": "กรุงเทพมหานคร", "address": "ต.ตลิ่งชัน อ.ตลิ่งชัน จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.793099, 100.464291", "coords": "13.793099, 100.464291", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอยธนสิทธ์ (บางปลา 2)", "tambon": "บางปลา", "amphoe": "บางพลี", "province": "สมุทรปราการ", "address": "ต.บางปลา อ.บางพลี จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.593339, 100.722210", "coords": "13.593339, 100.722210", "openDate": "2026-10-07", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "ซอยน้องแดง", "tambon": "คลองสวนพลู", "amphoe": "พระนครศรีอยุธยา", "province": "พระนครศรีอยุธยา", "address": "ต.คลองสวนพลู อ.พระนครศรีอยุธยา จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.344250, 100.607033", "coords": "14.344250, 100.607033", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอยวัดบุณยประดิษฐ์", "tambon": "บางแคเหนือ", "amphoe": "บางแค", "province": "กรุงเทพมหานคร", "address": "ต.บางแคเหนือ อ.บางแค จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.725474, 100.389135", "coords": "13.725474, 100.389135", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอยสวนสยาม", "tambon": "คันนายาว", "amphoe": "คันนายาว", "province": "กรุงเทพมหานคร", "address": "ต.คันนายาว อ.คันนายาว จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.802512, 100.691340", "coords": "13.802512, 100.691340", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอยหมู่บ้านลานทอง", "tambon": "บางพูด", "amphoe": "ปากเกร็ด", "province": "นนทบุรี", "address": "ต.บางพูด อ.ปากเกร็ด จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.919242, 100.516295", "coords": "13.919242, 100.516295", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอยหมู่บ้านหงส์ประยูร", "tambon": "บางบัวทอง", "amphoe": "บางบัวทอง", "province": "นนทบุรี", "address": "ต.บางบัวทอง อ.บางบัวทอง จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.889361, 100.435028", "coords": "13.889361, 100.435028", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ซอยเอกชัย 6", "tambon": "บางขุนเทียน", "amphoe": "จอมทอง", "province": "กรุงเทพมหานคร", "address": "ต.บางขุนเทียน อ.จอมทอง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.700330, 100.461095", "coords": "13.700330, 100.461095", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "ดงพระราม", "tambon": "ดงพระราม", "amphoe": "เมืองปราจีนบุรี", "province": "ปราจีนบุรี", "address": "ต.ดงพระราม อ.เมืองปราจีนบุรี จ.ปราจีนบุรี", "mapLink": "https://www.google.com/maps?q=14.064878, 101.413202", "coords": "14.064878, 101.413202", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "ดงพระราม (ปราจีนบุรี)", "tambon": "ดงพระราม", "amphoe": "เมืองปราจีนบุรี", "province": "ปราจีนบุรี", "address": "ต.ดงพระราม อ.เมืองปราจีนบุรี จ.ปราจีนบุรี", "mapLink": "https://www.google.com/maps?q=14.066140, 101.413502", "coords": "14.066140, 101.413502", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ดอนทอง (ฉะเชิงเทรา)", "tambon": "บางตีนเป็ด", "amphoe": "เมืองฉะเชิงเทรา", "province": "ฉะเชิงเทรา", "address": "ต.บางตีนเป็ด อ.เมืองฉะเชิงเทรา จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.667696, 101.093909", "coords": "13.667696, 101.093909", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ดีลัง", "tambon": "ดีลัง", "amphoe": "พัฒนานิคม", "province": "ลพบุรี", "address": "ต.ดีลัง อ.พัฒนานิคม จ.ลพบุรี", "mapLink": "https://www.google.com/maps?q=14.933832, 100.899107", "coords": "14.933832, 100.899107", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดดีดีคลอง 2", "tambon": "ประชาธิปัตย์", "amphoe": "ธัญบุรี", "province": "ปทุมธานี", "address": "ต.ประชาธิปัตย์ อ.ธัญบุรี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.992446, 100.655589", "coords": "13.992446, 100.655589", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดต้นแค (มวกเหล็ก)", "tambon": "มวกเหล็ก", "amphoe": "มวกเหล็ก", "province": "สระบุรี", "address": "ต.มวกเหล็ก อ.มวกเหล็ก จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.667555, 101.195339", "coords": "14.667555, 101.195339", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดนัดบ้านยาง", "tambon": "บ้านดอน", "amphoe": "อู่ทอง", "province": "สุพรรณบุรี", "address": "ต.บ้านดอน อ.อู่ทอง จ.สุพรรณบุรี", "mapLink": "https://www.google.com/maps?q=14.316809, 99.951924", "coords": "14.316809, 99.951924", "openDate": "2026-10-03", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "ตลาดนัดบ้านใหม่", "tambon": "บ้านใหม่", "amphoe": "เมืองฉะเชิงเทรา", "province": "ฉะเชิงเทรา", "address": "ต.บ้านใหม่ อ.เมืองฉะเชิงเทรา จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.706348, 101.091768", "coords": "13.706348, 101.091768", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดนัดวัดตามูล", "tambon": "ทรายขาว", "amphoe": "สอยดาว", "province": "จันทบุรี", "address": "ต.ทรายขาว อ.สอยดาว จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=13.080828, 102.260816", "coords": "13.080828, 102.260816", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดนัดสามกอ", "tambon": "สามกอ", "amphoe": "เสนา", "province": "พระนครศรีอยุธยา", "address": "ต.สามกอ อ.เสนา จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.317389, 100.405106", "coords": "14.317389, 100.405106", "openDate": "2026-10-07", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "ตลาดนัดสี่แยกห้วยยาง", "tambon": "สระลงเรือ", "amphoe": "ห้วยกระเจา", "province": "กาญจนบุรี", "address": "ต.สระลงเรือ อ.ห้วยกระเจา จ.กาญจนบุรี", "mapLink": "https://www.google.com/maps?q=14.335179, 99.782953", "coords": "14.335179, 99.782953", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดนัดหนองกระทุ่ม", "tambon": "หนองกระทุ่ม", "amphoe": "เดิมบางนางบวช", "province": "สุพรรณบุรี", "address": "ต.หนองกระทุ่ม อ.เดิมบางนางบวช จ.สุพรรณบุรี", "mapLink": "https://www.google.com/maps?q=14.871596, 99.848848", "coords": "14.871596, 99.848848", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดนัดหัวโค้งท่าเรือแกลง", "tambon": "แกลง", "amphoe": "เมืองระยอง", "province": "ระยอง", "address": "ต.แกลง อ.เมืองระยอง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.640271, 101.499168", "coords": "12.640271, 101.499168", "openDate": "2026-10-10", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "ตลาดนัดห้าแยก", "tambon": "บ้านกร่าง", "amphoe": "ศรีประจันต์", "province": "สุพรรณบุรี", "address": "ต.บ้านกร่าง อ.ศรีประจันต์ จ.สุพรรณบุรี", "mapLink": "https://www.google.com/maps?q=14.621466, 100.140958", "coords": "14.621466, 100.140958", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "ตลาดนัดโพธิกิจ", "tambon": "แสนตุ้ง", "amphoe": "เขาสมิง", "province": "ตราด", "address": "ต.แสนตุ้ง อ.เขาสมิง จ.ตราด", "mapLink": "https://www.google.com/maps?q=12.367240, 102.386005", "coords": "12.367240, 102.386005", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดนัดโพธิกิจ ยกเลิก", "tambon": "แสนตุ้ง", "amphoe": "เขาสมิง", "province": "ตราด", "address": "ต.แสนตุ้ง อ.เขาสมิง จ.ตราด", "mapLink": "https://www.google.com/maps?q=12.366156, 102.385472", "coords": "12.366156, 102.385472", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "ตลาดพระพรหม", "tambon": "หนองขาม", "amphoe": "ศรีราชา", "province": "ชลบุรี", "address": "ต.หนองขาม อ.ศรีราชา จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.100232, 100.967653", "coords": "13.100232, 100.967653", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดยายร้า", "tambon": "สำนักท้อน", "amphoe": "บ้านฉาง", "province": "ระยอง", "address": "ต.สำนักท้อน อ.บ้านฉาง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.760759, 101.024099", "coords": "12.760759, 101.024099", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดลาวนอก", "tambon": "คลองสาม", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "ต.คลองสาม อ.คลองหลวง จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.105991, 100.662931", "coords": "14.105991, 100.662931", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดลุงอ้วน", "tambon": "ปลวกแดง", "amphoe": "ปลวกแดง", "province": "ระยอง", "address": "ต.ปลวกแดง อ.ปลวกแดง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=13.016649, 101.151839", "coords": "13.016649, 101.151839", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดวัดม่วง", "tambon": "หัวตะพาน", "amphoe": "วิเศษชัยชาญ", "province": "อ่างทอง", "address": "ต.หัวตะพาน อ.วิเศษชัยชาญ จ.อ่างทอง", "mapLink": "https://www.google.com/maps?q=14.601589, 100.383874", "coords": "14.601589, 100.383874", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดสดสะตอน", "tambon": "สะตอน", "amphoe": "สอยดาว", "province": "จันทบุรี", "address": "ต.สะตอน อ.สอยดาว จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=13.145419, 102.311063", "coords": "13.145419, 102.311063", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดสะอาดพัฒนา", "tambon": "บึงยี่โถ", "amphoe": "ธัญบุรี", "province": "ปทุมธานี", "address": "ต.บึงยี่โถ อ.ธัญบุรี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.996273, 100.667101", "coords": "13.996273, 100.667101", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดสีทองคำ", "tambon": "มวกเหล็ก", "amphoe": "มวกเหล็ก", "province": "สระบุรี", "address": "ต.มวกเหล็ก อ.มวกเหล็ก จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.657339, 101.199472", "coords": "14.657339, 101.199472", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดสี่ขวาพัฒนา", "tambon": "ลำตาเสา", "amphoe": "วังน้อย", "province": "พระนครศรีอยุธยา", "address": "ต.ลำตาเสา อ.วังน้อย จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.274768, 100.682924", "coords": "14.274768, 100.682924", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดองครักษ์ ", "tambon": "องครักษ์", "amphoe": "องครักษ์", "province": "นครนายก", "address": "ต.องครักษ์ อ.องครักษ์ จ.นครนายก", "mapLink": "https://www.google.com/maps?q=14.121958, 101.001864", "coords": "14.121958, 101.001864", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดเงินเพิ่มพูน", "tambon": "แสมดำ", "amphoe": "บางขุนเทียน", "province": "กรุงเทพมหานคร", "address": "ต.แสมดำ อ.บางขุนเทียน จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.623950, 100.428367", "coords": "13.623950, 100.428367", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดเพิ่มทรัพย์สินธิวาธานี", "tambon": "สามเรือน", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "ต.สามเรือน อ.บางปะอิน จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.313036, 100.636531", "coords": "14.313036, 100.636531", "openDate": null, "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "-", "name": "ตลาดแม่เล้ง (บางคล้า)", "tambon": "บางคล้า", "amphoe": "บางคล้า", "province": "ฉะเชิงเทรา", "address": "ต.บางคล้า อ.บางคล้า จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.713269, 101.209598", "coords": "13.713269, 101.209598", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ตลาดโคกกระถิน", "tambon": "ห้วยขมิ้น", "amphoe": "หนองแค", "province": "สระบุรี", "address": "ต.ห้วยขมิ้น อ.หนองแค จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.406839, 100.879029", "coords": "14.406839, 100.879029", "openDate": null, "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "-", "name": "ถนน ปราจีนอนุสรณ์", "tambon": "ท่างาม", "amphoe": "เมืองปราจีนบุรี", "province": "ปราจีนบุรี", "address": "ต.ท่างาม อ.เมืองปราจีนบุรี จ.ปราจีนบุรี", "mapLink": "https://www.google.com/maps?q=14.053462, 101.391544", "coords": "14.053462, 101.391544", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ถนนขลุง-มะขาม", "tambon": "ขลุง", "amphoe": "ขลุง", "province": "จันทบุรี", "address": "ต.ขลุง อ.ขลุง จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=12.462004, 102.230785", "coords": "12.462004, 102.230785", "openDate": "2026-10-24", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "ถนนคลองซื่อ ซอย 3", "tambon": "บางโทรัด", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "ต.บางโทรัด อ.เมืองสมุทรสาคร จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.525469, 100.146722", "coords": "13.525469, 100.146722", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "ถนนจันทร์ทองเอี่ยม", "tambon": "บางรักพัฒนา", "amphoe": "บางบัวทอง", "province": "นนทบุรี", "address": "ต.บางรักพัฒนา อ.บางบัวทอง จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.891882, 100.429884", "coords": "13.891882, 100.429884", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ถนนนครลุง", "tambon": "บางไผ่", "amphoe": "บางแค", "province": "กรุงเทพมหานคร", "address": "ต.บางไผ่ อ.บางแค จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.731164, 100.392030", "coords": "13.731164, 100.392030", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ถนนนอกเพชรบุรี", "tambon": "ต้นมะม่วง", "amphoe": "เมืองเพชรบุรี", "province": "เพชรบุรี", "address": "ต.ต้นมะม่วง อ.เมืองเพชรบุรี จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=13.085769, 99.950652", "coords": "13.085769, 99.950652", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ถนนบางบ่อ", "tambon": "บางบ่อ", "amphoe": "บางบ่อ", "province": "สมุทรปราการ", "address": "ต.บางบ่อ อ.บางบ่อ จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.573509, 100.840113", "coords": "13.573509, 100.840113", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ถนนศรีโสธรตัดใหม่", "tambon": "หน้าเมือง", "amphoe": "เมืองฉะเชิงเทรา", "province": "ฉะเชิงเทรา", "address": "ต.หน้าเมือง อ.เมืองฉะเชิงเทรา จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.683335, 101.066696", "coords": "13.683335, 101.066696", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ถนนสวนผักสาย 1", "tambon": "ฉิมพลี", "amphoe": "ตลิ่งชัน", "province": "กรุงเทพมหานคร", "address": "ต.ฉิมพลี อ.ตลิ่งชัน จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.793010, 100.423263", "coords": "13.793010, 100.423263", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ถนนเทศบาลสาย 3 (ท่าใหม่)", "tambon": "ท่าใหม่", "amphoe": "ท่าใหม่", "province": "จันทบุรี", "address": "ต.ท่าใหม่ อ.ท่าใหม่ จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=12.615782, 102.014394", "coords": "12.615782, 102.014394", "openDate": "2026-10-21", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "ถนนไมตรีจิต", "tambon": "สามวาตะวันออก", "amphoe": "คลองสามวา", "province": "กรุงเทพมหานคร", "address": "ต.สามวาตะวันออก อ.คลองสามวา จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.918272, 100.780819", "coords": "13.918272, 100.780819", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ทล.305 กม.45  รังสิต-นครนายก", "tambon": "องครักษ์", "amphoe": "องครักษ์", "province": "นครนายก", "address": "ต.องครักษ์ อ.องครักษ์ จ.นครนายก", "mapLink": "https://www.google.com/maps?q=14.138840, 100.986828", "coords": "14.138840, 100.986828", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ที่ว่าการอำเภอนครหลวง", "tambon": "นครหลวง", "amphoe": "นครหลวง", "province": "พระนครศรีอยุธยา", "address": "ต.นครหลวง อ.นครหลวง จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.463584, 100.605171", "coords": "14.463584, 100.605171", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ทุ่งกลม-ตาลหมัน 9", "tambon": "หนองปรือ", "amphoe": "บางละมุง", "province": "ชลบุรี", "address": "ต.หนองปรือ อ.บางละมุง จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=12.917255, 100.927964", "coords": "12.917255, 100.927964", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ทุ่งมะขามหย่อง", "tambon": "วัดตูม", "amphoe": "พระนครศรีอยุธยา", "province": "พระนครศรีอยุธยา", "address": "ต.วัดตูม อ.พระนครศรีอยุธยา จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.397425, 100.529120", "coords": "14.397425, 100.529120", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ทุ่งโพธิ์ นาดี", "tambon": "ทุ่งโพธิ์", "amphoe": "นาดี", "province": "ปราจีนบุรี", "address": "ต.ทุ่งโพธิ์ อ.นาดี จ.ปราจีนบุรี", "mapLink": "https://www.google.com/maps?q=14.133105, 101.871807", "coords": "14.133105, 101.871807", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ท่าคล้อ", "tambon": "ท่าคล้อ", "amphoe": "แก่งคอย", "province": "สระบุรี", "address": "ต.ท่าคล้อ อ.แก่งคอย จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.673197, 101.021033", "coords": "14.673197, 101.021033", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ท่าศาลา 18", "tambon": "กกโก", "amphoe": "เมืองลพบุรี", "province": "ลพบุรี", "address": "ต.กกโก อ.เมืองลพบุรี จ.ลพบุรี", "mapLink": "https://www.google.com/maps?q=14.776993, 100.668779", "coords": "14.776993, 100.668779", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ท้ายซอย 2 แม่น้ำคู้", "tambon": "แม่น้ำคู้", "amphoe": "ปลวกแดง", "province": "ระยอง", "address": "ต.แม่น้ำคู้ อ.ปลวกแดง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.909845, 101.227683", "coords": "12.909845, 101.227683", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ท้ายพิกุล", "tambon": "ขุนโขลน", "amphoe": "พระพุทธบาท", "province": "สระบุรี", "address": "ต.ขุนโขลน อ.พระพุทธบาท จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.715558, 100.788186", "coords": "14.715558, 100.788186", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "นวมินทร์ 68", "tambon": "คลองกุ่ม", "amphoe": "บึงกุ่ม", "province": "กรุงเทพมหานคร", "address": "ต.คลองกุ่ม อ.บึงกุ่ม จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.806904, 100.654364", "coords": "13.806904, 100.654364", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "นวลจันทร์ 56", "tambon": "นวลจันทร์", "amphoe": "บึงกุ่ม", "province": "กรุงเทพมหานคร", "address": "ต.นวลจันทร์ อ.บึงกุ่ม จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.836111, 100.643118", "coords": "13.836111, 100.643118", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บางกระเจ้า", "tambon": "บางกระเจ้า", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "ต.บางกระเจ้า อ.เมืองสมุทรสาคร จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.528021, 100.198175", "coords": "13.528021, 100.198175", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "บางขนุนซอย 5", "tambon": "บางขนุน", "amphoe": "บางกรวย", "province": "นนทบุรี", "address": "ต.บางขนุน อ.บางกรวย จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.815087, 100.460849", "coords": "13.815087, 100.460849", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บางปู 55", "tambon": "ท้ายบ้านใหม่", "amphoe": "เมืองสมุทรปราการ", "province": "สมุทรปราการ", "address": "ต.ท้ายบ้านใหม่ อ.เมืองสมุทรปราการ จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.560581, 100.621273", "coords": "13.560581, 100.621273", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "บางพลีซ.1 (บางโทรัด)", "tambon": "บางโทรัด", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "ต.บางโทรัด อ.เมืองสมุทรสาคร จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.505119, 100.153369", "coords": "13.505119, 100.153369", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บางพลีน้อย", "tambon": "บางพลีน้อย", "amphoe": "บางบ่อ", "province": "สมุทรปราการ", "address": "ต.บางพลีน้อย อ.บางบ่อ จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.578744, 100.904507", "coords": "13.578744, 100.904507", "openDate": "2026-09-23", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "บางแก้ว (ฉะเชิงเทรา)", "tambon": "บางแก้ว", "amphoe": "เมืองฉะเชิงเทรา", "province": "ฉะเชิงเทรา", "address": "ต.บางแก้ว อ.เมืองฉะเชิงเทรา จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.698678, 101.133428", "coords": "13.698678, 101.133428", "openDate": null, "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "-", "name": "บางไผ่พัฒนา", "tambon": "บางไผ่", "amphoe": "เมืองนนทบุรี", "province": "นนทบุรี", "address": "ต.บางไผ่ อ.เมืองนนทบุรี จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.819344, 100.486128", "coords": "13.819344, 100.486128", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บางไผ่พัฒนา (ยกเลิก)", "tambon": "บางไผ่", "amphoe": "เมืองนนทบุรี", "province": "นนทบุรี", "address": "ต.บางไผ่ อ.เมืองนนทบุรี จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.819380, 100.486680", "coords": "13.819380, 100.486680", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บุยายใบ", "tambon": "ท่าตูม", "amphoe": "ศรีมหาโพธิ", "province": "ปราจีนบุรี", "address": "ต.ท่าตูม อ.ศรีมหาโพธิ จ.ปราจีนบุรี", "mapLink": "https://www.google.com/maps?q=13.900522, 101.586688", "coords": "13.900522, 101.586688", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บ้านช้าง (อำเภออุทัย)", "tambon": "บ้านช้าง", "amphoe": "อุทัย", "province": "พระนครศรีอยุธยา", "address": "ต.บ้านช้าง อ.อุทัย จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.304704, 100.682728", "coords": "14.304704, 100.682728", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บ้านตากแดด", "tambon": "ดอนตะโก", "amphoe": "เมืองราชบุรี", "province": "ราชบุรี", "address": "ต.ดอนตะโก อ.เมืองราชบุรี จ.ราชบุรี", "mapLink": "https://www.google.com/maps?q=13.521345, 99.825428", "coords": "13.521345, 99.825428", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บ้านนา ระยอง", "tambon": "บ้านนา", "amphoe": "แกลง", "province": "ระยอง", "address": "ต.บ้านนา อ.แกลง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.802856, 101.667084", "coords": "12.802856, 101.667084", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บ้านพร้าว-สุวรรณศร", "tambon": "บ้านนา", "amphoe": "บ้านนา", "province": "นครนายก", "address": "ต.บ้านนา อ.บ้านนา จ.นครนายก", "mapLink": "https://www.google.com/maps?q=14.241609, 101.119899", "coords": "14.241609, 101.119899", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บ้านสำนักคร้อ", "tambon": "ตะคร้ำเอน", "amphoe": "ท่ามะกา", "province": "กาญจนบุรี", "address": "ต.ตะคร้ำเอน อ.ท่ามะกา จ.กาญจนบุรี", "mapLink": "https://www.google.com/maps?q=13.996320, 99.718722", "coords": "13.996320, 99.718722", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "บ้านหม้อเพชรบุรี", "tambon": "บ้านหม้อ", "amphoe": "เมืองเพชรบุรี", "province": "เพชรบุรี", "address": "ต.บ้านหม้อ อ.เมืองเพชรบุรี จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=13.081022, 99.939728", "coords": "13.081022, 99.939728", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บ้านห้วยสะพาน (บึง-หนองปรือ)", "tambon": "บึง", "amphoe": "ศรีราชา", "province": "ชลบุรี", "address": "ต.บึง อ.ศรีราชา จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.087531, 101.012080", "coords": "13.087531, 101.012080", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บ้านเก่า ซอย18", "tambon": "บางนาง", "amphoe": "พานทอง", "province": "ชลบุรี", "address": "ต.บางนาง อ.พานทอง จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.467570, 101.060181", "coords": "13.467570, 101.060181", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บ้านเก่าซอย  4", "tambon": "บ้านเก่า", "amphoe": "พานทอง", "province": "ชลบุรี", "address": "ต.บ้านเก่า อ.พานทอง จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.457334, 101.014607", "coords": "13.457334, 101.014607", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บ้านเพชร-แสวงหา", "tambon": "แสวงหา", "amphoe": "แสวงหา", "province": "อ่างทอง", "address": "ต.แสวงหา อ.แสวงหา จ.อ่างทอง", "mapLink": "https://www.google.com/maps?q=14.751386, 100.322463", "coords": "14.751386, 100.322463", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "บ้านเอื้ออาทรรังสิต คลอง 1", "tambon": "ประชาธิปัตย์", "amphoe": "ธัญบุรี", "province": "ปทุมธานี", "address": "ต.ประชาธิปัตย์ อ.ธัญบุรี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.986010, 100.628469", "coords": "13.986010, 100.628469", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ประชาอุทิศ 76 แยก 4/1", "tambon": "ทุ่งครุ", "amphoe": "ทุ่งครุ", "province": "กรุงเทพมหานคร", "address": "ต.ทุ่งครุ อ.ทุ่งครุ จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.614125, 100.500338", "coords": "13.614125, 100.500338", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ปะตง สอยดาว ", "tambon": "ปะตง", "amphoe": "สอยดาว", "province": "จันทบุรี", "address": "ต.ปะตง อ.สอยดาว จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=13.128464, 102.215293", "coords": "13.128464, 102.215293", "openDate": "2026-10-28", "status": "Prospect"}, {"code": "-", "name": "ปากทางพันท้ายนรสิงห์ ซอย 2", "tambon": "พันท้ายนรสิงห์", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "ต.พันท้ายนรสิงห์ อ.เมืองสมุทรสาคร จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.573848, 100.364124", "coords": "13.573848, 100.364124", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ปากน้ำแขมหนู", "tambon": "ตะกาดเง้า", "amphoe": "ท่าใหม่", "province": "จันทบุรี", "address": "ต.ตะกาดเง้า อ.ท่าใหม่ จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=12.542692, 101.957775", "coords": "12.542692, 101.957775", "openDate": null, "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "-", "name": "ปากบ่อ", "tambon": "บางกระเจ้า", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "ต.บางกระเจ้า อ.เมืองสมุทรสาคร จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.546173, 100.195686", "coords": "13.546173, 100.195686", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "ป่าหวาย", "tambon": "ป่าตาล", "amphoe": "เมืองลพบุรี", "province": "ลพบุรี", "address": "ต.ป่าตาล อ.เมืองลพบุรี จ.ลพบุรี", "mapLink": "https://www.google.com/maps?q=14.776407, 100.644184", "coords": "14.776407, 100.644184", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "พรหมมาสตร์", "tambon": "พรหมมาสตร์", "amphoe": "เมืองลพบุรี", "province": "ลพบุรี", "address": "ต.พรหมมาสตร์ อ.เมืองลพบุรี จ.ลพบุรี", "mapLink": "https://www.google.com/maps?q=14.807773, 100.602283", "coords": "14.807773, 100.602283", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "พระยาประเสริฐ", "tambon": "พลับพลา", "amphoe": "วังทองหลาง", "province": "กรุงเทพมหานคร", "address": "ต.พลับพลา อ.วังทองหลาง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.770059, 100.613199", "coords": "13.770059, 100.613199", "openDate": "2026-10-10", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "พฤกษา คลอง 5", "tambon": "คลองห้า", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "ต.คลองห้า อ.คลองหลวง จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.042023, 100.709480", "coords": "14.042023, 100.709480", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "พฤกษาวิลเลียบคลองเปรมประชากร", "tambon": "บางพูน", "amphoe": "เมืองปทุมธานี", "province": "ปทุมธานี", "address": "ต.บางพูน อ.เมืองปทุมธานี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.006471, 100.596523", "coords": "14.006471, 100.596523", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "พลงช้างเผือก", "tambon": "ทางเกวียน", "amphoe": "แกลง", "province": "ระยอง", "address": "ต.ทางเกวียน อ.แกลง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.765831, 101.656037", "coords": "12.765831, 101.656037", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "พุทธมณฑลสาย 2", "tambon": "ศาลาธรรมสพน์", "amphoe": "ทวีวัฒนา", "province": "กรุงเทพมหานคร", "address": "ต.ศาลาธรรมสพน์ อ.ทวีวัฒนา จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.798393, 100.394044", "coords": "13.798393, 100.394044", "openDate": null, "status": "ก่อสร้างแล้ว รอเปิดร้าน"}, {"code": "-", "name": "พุทธมณฑลสาย 2 ซอย 10", "tambon": "บางแคเหนือ", "amphoe": "บางแค", "province": "กรุงเทพฯ", "address": "ต.บางแคเหนือ อ.บางแค จ.กรุงเทพฯ", "mapLink": "https://www.google.com/maps?q=13.724012, 100.400265", "coords": "13.724012, 100.400265", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "มาบยางพร20", "tambon": "มาบยางพร", "amphoe": "ปลวกแดง", "province": "ระยอง", "address": "ต.มาบยางพร อ.ปลวกแดง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.989685, 101.145334", "coords": "12.989685, 101.145334", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "มิตรสัมพันธ์ ซอย1 (อ่างศิลา)", "tambon": "อ่างศิลา", "amphoe": "เมืองชลบุรี", "province": "ชลบุรี", "address": "ต.อ่างศิลา อ.เมืองชลบุรี จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.334482, 100.928279", "coords": "13.334482, 100.928279", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "รักศักดิ์ชมูล ซอย 16", "tambon": "ท่าช้าง", "amphoe": "เมืองจันทบุรี", "province": "จันทบุรี", "address": "ต.ท่าช้าง อ.เมืองจันทบุรี จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=12.645657, 102.092022", "coords": "12.645657, 102.092022", "openDate": "2026-10-31", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "รักศักดิ์ชมูล ซอย 3", "tambon": "ท่าช้าง", "amphoe": "เมืองจันทบุรี", "province": "จันทบุรี", "address": "ต.ท่าช้าง อ.เมืองจันทบุรี จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=12.625794, 102.103997", "coords": "12.625794, 102.103997", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "รักศักดิ์ชมูลซอย 20", "tambon": "ท่าช้าง", "amphoe": "เมืองจันทบุรี", "province": "จันทบุรี", "address": "ต.ท่าช้าง อ.เมืองจันทบุรี จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=12.653655, 102.093846", "coords": "12.653655, 102.093846", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "รังสิตคลอง 8", "tambon": "บึงบอน", "amphoe": "หนองเสือ", "province": "ปทุมธานี", "address": "ต.บึงบอน อ.หนองเสือ จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.054290, 100.779044", "coords": "14.054290, 100.779044", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "รามคำแหง 112", "tambon": "สะพานสูง", "amphoe": "สะพานสูง", "province": "กรุงเทพมหานคร", "address": "ต.สะพานสูง อ.สะพานสูง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.777221, 100.675068", "coords": "13.777221, 100.675068", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "รามคำแหง 50", "tambon": "หัวหมาก", "amphoe": "บางกะปิ", "province": "กรุงเทพมหานคร", "address": "ต.หัวหมาก อ.บางกะปิ จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.760102, 100.642798", "coords": "13.760102, 100.642798", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ริชแลนด์มาเก็ตพลาซ่า", "tambon": "ลาดกระบัง", "amphoe": "ลาดกระบัง", "province": "กรุงเทพมหานคร", "address": "ต.ลาดกระบัง อ.ลาดกระบัง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.722482, 100.713240", "coords": "13.722482, 100.713240", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ลาดกระบัง 46", "tambon": "ลาดกระบัง", "amphoe": "ลาดกระบัง", "province": "กรุงเทพมหานคร", "address": "ต.ลาดกระบัง อ.ลาดกระบัง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.721473, 100.775618", "coords": "13.721473, 100.775618", "openDate": "2026-10-28", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "ลาดพร้าว 124", "tambon": "พลับพลา", "amphoe": "วังทองหลาง", "province": "กรุงเทพมหานคร", "address": "ต.พลับพลา อ.วังทองหลาง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.774733, 100.624907", "coords": "13.774733, 100.624907", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ลาดพร้าว 80 แยก 26", "tambon": "วังทองหลาง", "amphoe": "วังทองหลาง", "province": "กรุงเทพมหานคร", "address": "ต.วังทองหลาง อ.วังทองหลาง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.778478, 100.604160", "coords": "13.778478, 100.604160", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ลำเหย ยกเลิก", "tambon": "ลำเหย", "amphoe": "ดอนตูม", "province": "นครปฐม", "address": "ต.ลำเหย อ.ดอนตูม จ.นครปฐม", "mapLink": "https://www.google.com/maps?q=13.952855, 100.045788", "coords": "13.952855, 100.045788", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "วังน้ำซับ ศรีประจันต์", "tambon": "วังน้ำซับ", "amphoe": "ศรีประจันต์", "province": "สุพรรณบุรี", "address": "ต.วังน้ำซับ อ.ศรีประจันต์ จ.สุพรรณบุรี", "mapLink": "https://www.google.com/maps?q=14.673610, 100.112320", "coords": "14.673610, 100.112320", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "วังบัว", "tambon": "ลาดโพธิ์", "amphoe": "บ้านลาด", "province": "เพชรบุรี", "address": "ต.ลาดโพธิ์ อ.บ้านลาด จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=13.089835, 99.896919", "coords": "13.089835, 99.896919", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "วัดกำแพงเหนือ", "tambon": "บ้านสิงห์", "amphoe": "โพธาราม", "province": "ราชบุรี", "address": "ต.บ้านสิงห์ อ.โพธาราม จ.ราชบุรี", "mapLink": "https://www.google.com/maps?q=13.657851, 99.872688", "coords": "13.657851, 99.872688", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "วิสต้าวิลล์ ลำลูกกาคลอง 3", "tambon": "ลาดสวาย", "amphoe": "ลำลูกกา", "province": "ปทุมธานี", "address": "ต.ลาดสวาย อ.ลำลูกกา จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.954647, 100.664956", "coords": "13.954647, 100.664956", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "วิเศษสุขนคร (สุขสวัสดิ์ 70)", "tambon": "บางครุ", "amphoe": "พระประแดง", "province": "สมุทรปราการ", "address": "ต.บางครุ อ.พระประแดง จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.640065, 100.516889", "coords": "13.640065, 100.516889", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ศรีกะอาง", "tambon": "บ้านนา", "amphoe": "บ้านนา", "province": "นครนายก", "address": "ต.บ้านนา อ.บ้านนา จ.นครนายก", "mapLink": "https://www.google.com/maps?q=14.320045, 101.096174", "coords": "14.320045, 101.096174", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "สภ.วังน้อย", "tambon": "ลำตาเสา", "amphoe": "วังน้อย", "province": "พระนครศรีอยุธยา", "address": "ต.ลำตาเสา อ.วังน้อย จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.228028, 100.720086", "coords": "14.228028, 100.720086", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "สวัสดิการ 2", "tambon": "หนองแขม", "amphoe": "หนองแขม", "province": "กรุงเทพมหานคร", "address": "ต.หนองแขม อ.หนองแขม จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.698754, 100.356576", "coords": "13.698754, 100.356576", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "สาขาคลองสาม 16/1", "tambon": "คลองสาม", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "ต.คลองสาม อ.คลองหลวง จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.165364, 100.663327", "coords": "14.165364, 100.663327", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "สานฝัน (สุวินทวงศ์)", "tambon": "ศาลาแดง", "amphoe": "บางน้ำเปรี้ยว", "province": "ฉะเชิงเทรา", "address": "ต.ศาลาแดง อ.บางน้ำเปรี้ยว จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.795488, 100.943111", "coords": "13.795488, 100.943111", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "สำเภาล่ม", "tambon": "สำเภาล่ม", "amphoe": "พระนครศรีอยุธยา", "province": "พระนครศรีอยุธยา", "address": "ต.สำเภาล่ม อ.พระนครศรีอยุธยา จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.344675, 100.570569", "coords": "14.344675, 100.570569", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "สินทรัพย์พลาซ่า", "tambon": "บึงยี่โถ", "amphoe": "ธัญบุรี", "province": "ปทุมธานี", "address": "ต.บึงยี่โถ อ.ธัญบุรี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.001679, 100.693551", "coords": "14.001679, 100.693551", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "สุขาภิบาล 5 ซอย 5", "tambon": "ท่าแร้ง", "amphoe": "บางเขน", "province": "กรุงเทพมหานคร", "address": "ต.ท่าแร้ง อ.บางเขน จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.864170, 100.632413", "coords": "13.864170, 100.632413", "openDate": "2026-10-21", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "สุวินทวงศ์ 64", "tambon": "ลำผักชี", "amphoe": "หนองจอก", "province": "กรุงเทพมหานคร", "address": "ต.ลำผักชี อ.หนองจอก จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.805572, 100.847782", "coords": "13.805572, 100.847782", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หทัยราษฎร์ 41 (ม.ฮาบิเทีย)", "tambon": "สามวาตะวันตก", "amphoe": "คลองสามวา", "province": "กรุงเทพมหานคร", "address": "ต.สามวาตะวันตก อ.คลองสามวา จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.907587, 100.721451", "coords": "13.907587, 100.721451", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หนองกบ", "tambon": "หนองกบ", "amphoe": "บ้านโป่ง", "province": "ราชบุรี", "address": "ต.หนองกบ อ.บ้านโป่ง จ.ราชบุรี", "mapLink": "https://www.google.com/maps?q=13.812380, 99.952907", "coords": "13.812380, 99.952907", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "หนองข่า-เนินหิน (พนัสนิคม)", "tambon": "หนองเหียง", "amphoe": "พนัสนิคม", "province": "ชลบุรี", "address": "ต.หนองเหียง อ.พนัสนิคม จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.484906, 101.283631", "coords": "13.484906, 101.283631", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หนองชาก-หมู่บ้านพฤกษาแลนด์", "tambon": "หนองชาก", "amphoe": "บ้านบึง", "province": "ชลบุรี", "address": "ต.หนองชาก อ.บ้านบึง จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.294121, 101.176047", "coords": "13.294121, 101.176047", "openDate": "2026-10-07", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "หนองหว้า", "tambon": "ห้วยโป่ง", "amphoe": "เมืองระยอง", "province": "ระยอง", "address": "ต.ห้วยโป่ง อ.เมืองระยอง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.755114, 101.139248", "coords": "12.755114, 101.139248", "openDate": "2026-10-21", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "หนองโดน", "tambon": "หนองโดน", "amphoe": "หนองโดน", "province": "สระบุรี", "address": "ต.หนองโดน อ.หนองโดน จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.683906, 100.706539", "coords": "14.683906, 100.706539", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หน้ากรมที่ดินหนองแค", "tambon": "ห้วยขมิ้น", "amphoe": "หนองแค", "province": "สระบุรี", "address": "ต.ห้วยขมิ้น อ.หนองแค จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.409535, 100.894299", "coords": "14.409535, 100.894299", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หน้ารพ.สิงห์บุรีเวชการ", "tambon": "บางพุทรา", "amphoe": "เมืองสิงห์บุรี", "province": "สิงห์บุรี", "address": "ต.บางพุทรา อ.เมืองสิงห์บุรี จ.สิงห์บุรี", "mapLink": "https://www.google.com/maps?q=14.888947, 100.399568", "coords": "14.888947, 100.399568", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หมู่บ้าน Indy (ประชาอุทิศ 90)", "tambon": "ทุ่งครุ", "amphoe": "ทุ่งครุ", "province": "กรุงเทพมหานคร", "address": "ต.ทุ่งครุ อ.ทุ่งครุ จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.594431, 100.507587", "coords": "13.594431, 100.507587", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หมู่บ้านบัวทอง 4", "tambon": "พิมลราช", "amphoe": "บางบัวทอง", "province": "นนทบุรี", "address": "ต.พิมลราช อ.บางบัวทอง จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.928319, 100.355752", "coords": "13.928319, 100.355752", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หมู่บ้านพฤกษา 2 (รังสิตคลอง 8)", "tambon": "ลำผักกูด", "amphoe": "ธัญบุรี", "province": "ปทุมธานี", "address": "ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.035937, 100.778257", "coords": "14.035937, 100.778257", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หมู่บ้านพฤกษา 54", "tambon": "บางแม่นาง", "amphoe": "บางใหญ่", "province": "นนทบุรี", "address": "ต.บางแม่นาง อ.บางใหญ่ จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.880212, 100.369679", "coords": "13.880212, 100.369679", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หมู่บ้านลัลลี่วิลล์", "tambon": "แพรกษา", "amphoe": "เมืองสมุทรปราการ", "province": "สมุทรปราการ", "address": "ต.แพรกษา อ.เมืองสมุทรปราการ จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.588908, 100.658137", "coords": "13.588908, 100.658137", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หมู่บ้านลุมพินี ทาวน์วิลล์", "tambon": "บางขนุน", "amphoe": "บางกรวย", "province": "นนทบุรี", "address": "ต.บางขนุน อ.บางกรวย จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.807246, 100.462673", "coords": "13.807246, 100.462673", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หมู่บ้านสัมมากร", "tambon": "สะพานสูง", "amphoe": "สะพานสูง", "province": "กรุงเทพมหานคร", "address": "ต.สะพานสูง อ.สะพานสูง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.770723, 100.677030", "coords": "13.770723, 100.677030", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "หมู่บ้านสัมมากร ยกเลิก", "tambon": "สะพานสูง", "amphoe": "สะพานสูง", "province": "กรุงเทพมหานคร", "address": "ต.สะพานสูง อ.สะพานสูง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.773875, 100.675112", "coords": "13.773875, 100.675112", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "หมู่บ้านแฟมิลี่ซิตี้", "tambon": "นาป่า", "amphoe": "เมืองชลบุรี", "province": "ชลบุรี", "address": "ต.นาป่า อ.เมืองชลบุรี จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.406889, 101.030595", "coords": "13.406889, 101.030595", "openDate": "2026-10-24", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "หลักห้า(บ้านแพ้ว)", "tambon": "โรงเข้", "amphoe": "บ้านแพ้ว", "province": "สมุทรสาคร", "address": "ต.โรงเข้ อ.บ้านแพ้ว จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.557290, 100.048297", "coords": "13.557290, 100.048297", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "ห้างแก้ว ซอย 4", "tambon": "มาบยางพร", "amphoe": "ปลวกแดง", "province": "ระยอง", "address": "ต.มาบยางพร อ.ปลวกแดง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=13.005343, 101.101458", "coords": "13.005343, 101.101458", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "อนามัยงามเจริญ", "tambon": "ท่าข้าม", "amphoe": "บางขุนเทียน", "province": "กรุงเทพมหานคร", "address": "ต.ท่าข้าม อ.บางขุนเทียน จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.657270, 100.447712", "coords": "13.657270, 100.447712", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "อิ่มอัมพร 9", "tambon": "อ้อมน้อย", "amphoe": "กระทุ่มแบน", "province": "สมุทรสาคร", "address": "ต.อ้อมน้อย อ.กระทุ่มแบน จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.679146, 100.275401", "coords": "13.679146, 100.275401", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "อุตสาหกรรมบางกะดี", "tambon": "บางกะดี", "amphoe": "เมืองปทุมธานี", "province": "ปทุมธานี", "address": "ต.บางกะดี อ.เมืองปทุมธานี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.983015, 100.550280", "coords": "13.983015, 100.550280", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เกาะศาลพระ", "tambon": "เกาะศาลพระ", "amphoe": "วัดเพลง", "province": "ราชบุรี", "address": "ต.เกาะศาลพระ อ.วัดเพลง จ.ราชบุรี", "mapLink": "https://www.google.com/maps?q=13.478350, 99.871493", "coords": "13.478350, 99.871493", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เก้ากิโล 31", "tambon": "สุรศักดิ์", "amphoe": "ศรีราชา", "province": "ชลบุรี", "address": "ต.สุรศักดิ์ อ.ศรีราชา จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.145260, 100.936608", "coords": "13.145260, 100.936608", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เขาดินศรีราชา", "tambon": "หนองขาม", "amphoe": "ศรีราชา", "province": "ชลบุรี", "address": "ต.หนองขาม อ.ศรีราชา จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.148984, 101.004318", "coords": "13.148984, 101.004318", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "เขามะกอก 1", "tambon": "หนองปรือ", "amphoe": "บางละมุง", "province": "ชลบุรี", "address": "ต.หนองปรือ อ.บางละมุง จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=12.878027, 100.916548", "coords": "12.878027, 100.916548", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เคหะ ท่าจีน", "tambon": "ท่าจีน", "amphoe": "เมืองสมุทรสาคร", "province": "สมุทรสาคร", "address": "ต.ท่าจีน อ.เมืองสมุทรสาคร จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.540534, 100.241263", "coords": "13.540534, 100.241263", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เคหะจันทบุรี 1", "tambon": "ท่าช้าง", "amphoe": "เมืองจันทบุรี", "province": "จันทบุรี", "address": "ต.ท่าช้าง อ.เมืองจันทบุรี จ.จันทบุรี", "mapLink": "https://www.google.com/maps?q=12.641755, 102.089545", "coords": "12.641755, 102.089545", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เคหะบางชัน", "tambon": "มีนบุรี", "amphoe": "มีนบุรี", "province": "กรุงเทพมหานคร", "address": "ต.มีนบุรี อ.มีนบุรี จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.805514, 100.709595", "coords": "13.805514, 100.709595", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เคหะเอื้ออาทรสุวรรณภูมิ 1 (ศรีวารีน้อย)", "tambon": "ศีรษะจรเข้ใหญ่", "amphoe": "บางเสาธง", "province": "สมุทรปราการ", "address": "ต.ศีรษะจรเข้ใหญ่ อ.บางเสาธง จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.647601, 100.789661", "coords": "13.647601, 100.789661", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เคหะเอื้ออาทรสุวรรณภูมิ2 (บางนากม.16)", "tambon": "บางโฉลง", "amphoe": "บางพลี", "province": "สมุทรปราการ", "address": "ต.บางโฉลง อ.บางพลี จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.629143, 100.753195", "coords": "13.629143, 100.753195", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เคหะแหลมฉบัง", "tambon": "บางละมุง:", "amphoe": "บางละมุง", "province": "ชลบุรี", "address": "ต.บางละมุง: อ.บางละมุง จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.076476, 100.936871", "coords": "13.076476, 100.936871", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เจริญกรุง 85", "tambon": "วัดพระยาไกร", "amphoe": "บางคอแหลม", "province": "กรุงเทพมหานคร", "address": "ต.วัดพระยาไกร อ.บางคอแหลม จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.703597, 100.510976", "coords": "13.703597, 100.510976", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เฉลิมพระเกียรติ 22", "tambon": "หนองบอน", "amphoe": "ประเวศ", "province": "กรุงเทพมหานคร", "address": "ต.หนองบอน อ.ประเวศ จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.676757, 100.663404", "coords": "13.676757, 100.663404", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เฉลิมพระเกียรติ 22 แยก 12", "tambon": "หนองบอน", "amphoe": "ประเวศ", "province": "กรุงเทพมหานคร", "address": "ต.หนองบอน อ.ประเวศ จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.675183, 100.663989", "coords": "13.675183, 100.663989", "openDate": "2026-10-28", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "เดอะ กราวด์ รังสิต", "tambon": "ประชาธิปัตย์", "amphoe": "ธัญบุรี", "province": "ปทุมธานี", "address": "ต.ประชาธิปัตย์ อ.ธัญบุรี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.992328, 100.655371", "coords": "13.992328, 100.655371", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เทพกุญชร 2", "tambon": "คลองหนึ่ง", "amphoe": "คลองหลวง", "province": "ปทุมธานี", "address": "ต.คลองหนึ่ง อ.คลองหลวง จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.124332, 100.631017", "coords": "14.124332, 100.631017", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เทศบาลบางปู 95", "tambon": "บางปูใหม่", "amphoe": "เมืองสมุทรปราการ", "province": "สมุทรปราการ", "address": "ต.บางปูใหม่ อ.เมืองสมุทรปราการ จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.517294, 100.679286", "coords": "13.517294, 100.679286", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "เทศบาลบางปู 95 ยกเลิก", "tambon": "บางปูใหม่", "amphoe": "เมืองสมุทรปราการ", "province": "สมุทรปราการ", "address": "ต.บางปูใหม่ อ.เมืองสมุทรปราการ จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.516908, 100.679375", "coords": "13.516908, 100.679375", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "เทศบาลลาดบัวหลวง", "tambon": "สามเมือง", "amphoe": "ลาดบัวหลวง", "province": "พระนครศรีอยุธยา", "address": "ต.สามเมือง อ.ลาดบัวหลวง จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.165823, 100.300866", "coords": "14.165823, 100.300866", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เปี่ยมลาภ", "tambon": "มาบยางพร", "amphoe": "ปลวกแดง", "province": "ระยอง", "address": "ต.มาบยางพร อ.ปลวกแดง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.972428, 101.155039", "coords": "12.972428, 101.155039", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เพชรเกษม 87", "tambon": "อ้อมน้อย", "amphoe": "กระทุ่มแบน", "province": "สมุทรสาคร", "address": "ต.อ้อมน้อย อ.กระทุ่มแบน จ.สมุทรสาคร", "mapLink": "https://www.google.com/maps?q=13.703496, 100.324239", "coords": "13.703496, 100.324239", "openDate": "2026-10-24", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "เมืองแก้ว", "tambon": "บางแก้ว", "amphoe": "บางพลี ", "province": "สมุทรปราการ", "address": "ต.บางแก้ว อ.บางพลี  จ.สมุทรปราการ", "mapLink": "https://www.google.com/maps?q=13.644550,100.673634", "coords": "13.644550, 100.673634", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "เมโทรพาร์ค", "tambon": "บางหว้า", "amphoe": "ภาษีเจริญ", "province": "กรุงเทพมหานคร", "address": "ต.บางหว้า อ.ภาษีเจริญ จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.709276, 100.449245", "coords": "13.709276, 100.449245", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เลียบคลองชลประทาน", "tambon": "นาโฉง", "amphoe": "เมืองสระบุรี", "province": "สระบุรี", "address": "ต.นาโฉง อ.เมืองสระบุรี จ.สระบุรี", "mapLink": "https://www.google.com/maps?q=14.537424, 100.888679", "coords": "14.537424, 100.888679", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เลียบคลองบางเดื่อ", "tambon": "คลองพระอุดม", "amphoe": "ลาดหลุมแก้ว", "province": "ปทุมธานี", "address": "ต.คลองพระอุดม อ.ลาดหลุมแก้ว จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.998573, 100.467190", "coords": "13.998573, 100.467190", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เลียบคลองพานทอง", "tambon": "พานทอง", "amphoe": "พานทอง", "province": "ชลบุรี", "address": "ต.พานทอง อ.พานทอง จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.473697, 101.095406", "coords": "13.473697, 101.095406", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เลียบคลองเปรมฯ เมืองเอก", "tambon": "หลักหก", "amphoe": "เมืองปทุมธานี", "province": "ปทุมธานี", "address": "ต.หลักหก อ.เมืองปทุมธานี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=13.963120, 100.602486", "coords": "13.963120, 100.602486", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เลี่ยงเมืองปากเกร็ด ซอย 37", "tambon": "บางตลาด", "amphoe": "ปากเกร็ด", "province": "นนทบุรี", "address": "ต.บางตลาด อ.ปากเกร็ด จ.นนทบุรี", "mapLink": "https://www.google.com/maps?q=13.899265, 100.518510", "coords": "13.899265, 100.518510", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เอกชัย 66", "tambon": "คลองบางพราน", "amphoe": "บางบอน", "province": "กรุงเทพมหานคร", "address": "ต.คลองบางพราน อ.บางบอน จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.677369, 100.420772", "coords": "13.677369, 100.420772", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เอื้ออาทร ดงพระราม", "tambon": "ดงพระราม", "amphoe": "เมืองปราจีนบุรี", "province": "ปราจีนบุรี", "address": "ต.ดงพระราม อ.เมืองปราจีนบุรี จ.ปราจีนบุรี", "mapLink": "https://www.google.com/maps?q=14.056839, 101.387503", "coords": "14.056839, 101.387503", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เอื้ออาทรปัญญารามอินทรา", "tambon": "บางชัน", "amphoe": "คลองสามวา", "province": "กรุงเทพมหานคร", "address": "ต.บางชัน อ.คลองสามวา จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.852011, 100.701307", "coords": "13.852011, 100.701307", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เอื้ออาทรลาดกระบัง 2", "tambon": "ทับยาว", "amphoe": "ลาดกระบัง", "province": "กรุงเทพมหานคร", "address": "ต.ทับยาว อ.ลาดกระบัง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.716183, 100.818813", "coords": "13.716183, 100.818813", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เอื้ออาทรลาดกระบัง 2 ยกเลิก", "tambon": "ทับยาว", "amphoe": "ลาดกระบัง", "province": "กรุงเทพมหานคร", "address": "ต.ทับยาว อ.ลาดกระบัง จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.715254, 100.820177", "coords": "13.715254, 100.820177", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "เอื้ออาทรโรจนะ (อยุธยา)", "tambon": "บ้านสร้าง", "amphoe": "บางปะอิน", "province": "พระนครศรีอยุธยา", "address": "ต.บ้านสร้าง อ.บางปะอิน จ.พระนครศรีอยุธยา", "mapLink": "https://www.google.com/maps?q=14.302048, 100.670149", "coords": "14.302048, 100.670149", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "เอื้ออาทรไร่กล้วย", "tambon": "สุรศักดิ์", "amphoe": "ศรีราชา", "province": "ชลบุรี", "address": "ต.สุรศักดิ์ อ.ศรีราชา จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=13.161807, 100.960826", "coords": "13.161807, 100.960826", "openDate": "2026-10-17", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "แจ้งวัฒนะ 10 แยก 9", "tambon": "ทุ่งสองห้อง", "amphoe": "หลักสี่", "province": "กรุงเทพมหานคร", "address": "ต.ทุ่งสองห้อง อ.หลักสี่ จ.กรุงเทพมหานคร", "mapLink": "https://www.google.com/maps?q=13.893260, 100.577969", "coords": "13.893260, 100.577969", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "แฟลตคลองจั่น", "tambon": "คลองจั่น", "amphoe": "บางกะปิ", "province": "กรุงเทพฯ", "address": "ต.คลองจั่น อ.บางกะปิ จ.กรุงเทพฯ", "mapLink": "https://www.google.com/maps?q=13.770790, 100.648437", "coords": "13.770790, 100.648437", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "แม่น้ำคู้ ซอย 3", "tambon": "แม่น้ำคู้", "amphoe": "ปลวกแดง", "province": "ระยอง", "address": "ต.แม่น้ำคู้ อ.ปลวกแดง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.937877, 101.229676", "coords": "12.937877, 101.229676", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "แยกกะเฉด", "tambon": "กะเฉด", "amphoe": "เมืองระยอง", "province": "ระยอง", "address": "ต.กะเฉด อ.เมืองระยอง จ.ระยอง", "mapLink": "https://www.google.com/maps?q=12.663403, 101.504296", "coords": "12.663403, 101.504296", "openDate": "2026-10-03", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "แยกดอนแจง", "tambon": "หน้าเมือง", "amphoe": "เมืองราชบุรี", "province": "ราชบุรี", "address": "ต.หน้าเมือง อ.เมืองราชบุรี จ.ราชบุรี", "mapLink": "https://www.google.com/maps?q=13.517432, 99.815757", "coords": "13.517432, 99.815757", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "แยกตาบัว-แสนตุ้ง", "tambon": "แสนตุ้ง", "amphoe": "เขาสมิง", "province": "ตราด", "address": "ต.แสนตุ้ง อ.เขาสมิง จ.ตราด", "mapLink": "https://www.google.com/maps?q=12.392817, 102.392394", "coords": "12.392817, 102.392394", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "แยกทุ่งสะเดา", "tambon": "วังเย็น", "amphoe": "แปลงยาว", "province": "ฉะเชิงเทรา", "address": "ต.วังเย็น อ.แปลงยาว จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.580166, 101.284176", "coords": "13.580166, 101.284176", "openDate": "2026-10-21", "status": "ยังไม่ลงเสาเข็ม"}, {"code": "-", "name": "แยกศรีนาวา (นครนายก)", "tambon": "ศรีนาวา", "amphoe": "เมืองนครนายก", "province": "นครนายก", "address": "ต.ศรีนาวา อ.เมืองนครนายก จ.นครนายก", "mapLink": "https://www.google.com/maps?q=14.215621, 101.264594", "coords": "14.215621, 101.264594", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "แยกอบทม-วิเศษชัยชาญ", "tambon": "ยี่ล้น", "amphoe": "วิเศษชัยชาญ", "province": "อ่างทอง", "address": "ต.ยี่ล้น อ.วิเศษชัยชาญ จ.อ่างทอง", "mapLink": "https://www.google.com/maps?q=14.579049, 100.288436", "coords": "14.579049, 100.288436", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "แยกเจ", "tambon": "บางเสร่", "amphoe": "สัตหีบ", "province": "ชลบุรี", "address": "ต.บางเสร่ อ.สัตหีบ จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=12.730496, 100.901509", "coords": "12.730496, 100.901509", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "แยกเจ ยกเลิก", "tambon": "บางเสร่", "amphoe": "สัตหีบ", "province": "ชลบุรี", "address": "ต.บางเสร่ อ.สัตหีบ จ.ชลบุรี", "mapLink": "https://www.google.com/maps?q=12.730312, 100.900750", "coords": "12.730312, 100.900750", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "แสนภูดาษ", "tambon": "แสนภูดาษ", "amphoe": "บ้านโพธิ์", "province": "ฉะเชิงเทรา", "address": "ต.แสนภูดาษ อ.บ้านโพธิ์ จ.ฉะเชิงเทรา", "mapLink": "https://www.google.com/maps?q=13.585287, 101.010461", "coords": "13.585287, 101.010461", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "โคกกะเทียม", "tambon": "โคกกะเทียม", "amphoe": "เมืองลพบุรี", "province": "ลพบุรี", "address": "ต.โคกกะเทียม อ.เมืองลพบุรี จ.ลพบุรี", "mapLink": "https://www.google.com/maps?q=14.905089, 100.596482", "coords": "14.905089, 100.596482", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "โคกสลุง", "tambon": "โคกสลุง", "amphoe": "พัฒนานิคม", "province": "ลพบุรี", "address": "ต.โคกสลุง อ.พัฒนานิคม จ.ลพบุรี", "mapLink": "https://www.google.com/maps?q=14.982125, 101.007881", "coords": "14.982125, 101.007881", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "โคกหม้อ เพชรบุรี", "tambon": "ช่องสะแก", "amphoe": "เมืองเพชรบุรี", "province": "เพชรบุรี", "address": "ต.ช่องสะแก อ.เมืองเพชรบุรี จ.เพชรบุรี", "mapLink": "https://www.google.com/maps?q=13.099647, 99.964094", "coords": "13.099647, 99.964094", "openDate": null, "status": "Cancel"}, {"code": "-", "name": "โคกเจริญ-ลพบุรี", "tambon": "โคกเจริญ", "amphoe": "โคกเจริญ", "province": "ลพบุรี", "address": "ต.โคกเจริญ อ.โคกเจริญ จ.ลพบุรี", "mapLink": "https://www.google.com/maps?q=15.380421, 100.818820", "coords": "15.380421, 100.818820", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "โพกรวม (สิงห์บุรี)", "tambon": "โพกรวม", "amphoe": "เมืองสิงห์บุรี", "province": "สิงห์บุรี", "address": "ต.โพกรวม อ.เมืองสิงห์บุรี จ.สิงห์บุรี", "mapLink": "https://www.google.com/maps?q=14.934321, 100.372743", "coords": "14.934321, 100.372743", "openDate": null, "status": "Prospect"}, {"code": "-", "name": "โมดิวิลล่า", "tambon": "บ้านกลาง", "amphoe": "เมืองปทุมธานี", "province": "ปทุมธานี", "address": "ต.บ้านกลาง อ.เมืองปทุมธานี จ.ปทุมธานี", "mapLink": "https://www.google.com/maps?q=14.009526, 100.571304", "coords": "14.009526, 100.571304", "openDate": null, "status": "Prospect"}];
-
-function getBranchMasterData() {
-  return BRANCH_MASTER;
-}
-function getSheet_() {
-  const ss = getSpreadsheet_();
-  let sheet = ss.getSheetByName('Drafts');
-  if (!sheet) {
-    sheet = ss.getSheets()[0];
-    sheet.setName('Drafts');
-    sheet.appendRow(['BranchName', 'JSON', 'UpdatedAt', 'SavedBy']);
-    sheet.setFrozenRows(1);
-  }
-  ensureSavedByColumn_(sheet);
-  return sheet;
-}
-
-function ensureSavedByColumn_(sheet) {
-  const header = sheet.getRange(1, 1, 1, Math.max(4, sheet.getLastColumn())).getValues()[0];
-  if (!header[3]) {
-    sheet.getRange(1, 4).setValue('SavedBy');
-  }
-}
-
-function getAccessSheet_() {
-  const ss = getSpreadsheet_();
-  let sheet = ss.getSheetByName('AccessList');
-  if (!sheet) {
-    sheet = ss.insertSheet('AccessList');
-    sheet.appendRow(['Name', 'Password']);
-    sheet.appendRow(['ตัวอย่าง เช่น สมชาย ใจดี', 'เปลี่ยนรหัสนี้ก่อนใช้งาน']);
-    sheet.setFrozenRows(1);
-  }
-  return sheet;
-}
-
 function normalizeName_(s) {
   return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
-
+// สำเร็จ -> { token, name } / ไม่สำเร็จ -> false
 function checkLogin(name, password) {
   if (!name || !password) return false;
-  const sheet = getAccessSheet_();
-  const data = sheet.getDataRange().getValues();
   const target = normalizeName_(name);
-  for (let i = 1; i < data.length; i++) {
-    const rowName = normalizeName_(data[i][0]);
-    const rowPass = String(data[i][1] == null ? '' : data[i][1]);
-    if (rowName && rowName === target && rowPass === String(password)) {
-      return true;
+  const cache = CacheService.getScriptCache();
+  const failKey = 'loginfail_' + Utilities.base64EncodeWebSafe(target, Utilities.Charset.UTF_8).slice(0, 200);
+  const fails = Number(cache.get(failKey) || 0);
+  if (fails >= LOGIN_MAX_FAILS_) throw new Error('ใส่รหัสผิดหลายครั้งเกินไป กรุณารอ 10 นาทีแล้วลองใหม่');
+  const users = readUsers_();
+  for (let i = 0; i < users.length; i++) {
+    if (normalizeName_(users[i][0]) === target && users[i][1] === String(password)) {
+      cache.remove(failKey);
+      cache.remove('active_users');
+      const display = String(users[i][0]).trim();
+      return { token: makeToken_(display), name: display };
     }
   }
+  cache.put(failKey, String(fails + 1), 600);
   return false;
 }
 
-function saveDraft(name, jsonStr, savedBy) {
-  if (!name) throw new Error('ต้องระบุชื่อสาขา');
-  const sheet = getSheet_();
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === name) {
-      sheet.getRange(i + 1, 2).setValue(jsonStr);
-      sheet.getRange(i + 1, 3).setValue(new Date());
-      sheet.getRange(i + 1, 4).setValue(savedBy || '');
-      return true;
-    }
+// ===================== Drive: โฟลเดอร์ + ไฟล์หลัก =====================
+function getRootFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('ROOT_FOLDER_ID');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* หาย -> สร้างใหม่ */ } }
+  const f = DriveApp.createFolder(ROOT_FOLDER_NAME_);
+  props.setProperty('ROOT_FOLDER_ID', f.getId());
+  return f;
+}
+// โฟลเดอร์ย่อยใต้โฟลเดอร์หลัก — ตั้งใจไม่แชร์อัตโนมัติ (เจ้าของกดแชร์โฟลเดอร์หลักให้ทีม/หัวหน้าเองใน Drive)
+function getSubFolder_(propKey, name) {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty(propKey);
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* หาย -> สร้างใหม่ */ } }
+  const f = getRootFolder_().createFolder(name);
+  props.setProperty(propKey, f.getId());
+  return f;
+}
+let MAIN_SS_ = null; // เปิดไฟล์ครั้งเดียวต่อ 1 คำสั่ง
+function getMainSpreadsheet_() {
+  if (MAIN_SS_) return MAIN_SS_;
+  MAIN_SS_ = openOrCreateMainSpreadsheet_();
+  return MAIN_SS_;
+}
+function openOrCreateMainSpreadsheet_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('MAIN_SHEET_ID');
+  if (id) { try { return SpreadsheetApp.openById(id); } catch (e) { /* หาย -> สร้างใหม่ */ } }
+  const ss = SpreadsheetApp.create(MAIN_SHEET_NAME_);
+  ss.setSpreadsheetTimeZone(APP_TZ_);
+  DriveApp.getFileById(ss.getId()).moveTo(getRootFolder_());
+  props.setProperty('MAIN_SHEET_ID', ss.getId());
+  return ss;
+}
+
+// ===================== tab ที่หัวหน้าเปิดดู (1 แถว = 1 รายการ) =====================
+// แต่ละ tab มีหัวตาราง 2 แถว (คีย์ภาษาอังกฤษ + ภาษาไทย) แบบเดียวกับ PR Check-in
+// ทุกครั้งที่บันทึกสาขา ระบบลบแถวเดิมของสาขานั้นแล้วเขียนใหม่ทั้งชุด (ทำเฉพาะ tab ที่ข้อมูลเปลี่ยน)
+// คอลัมน์ฟอร์แมต: '@' = ข้อความ (กันเบอร์โทรเลข 0 หาย / วันที่เพี้ยน), อื่น ๆ = ตัวเลข
+const TABS_ = {
+  branch: {
+    name: 'สาขา',
+    cols: [
+      ['branch_key', 'สาขา (ชื่อที่บันทึก)'], ['store_code', 'รหัสสาขา'], ['branch_name', 'ชื่อสาขา'],
+      ['province', 'จังหวัด'], ['address', 'ที่อยู่'], ['coords', 'พิกัด'], ['map_link', 'ลิงก์แผนที่'],
+      ['responsible', 'ผู้รับผิดชอบ'], ['team_sma', 'ทีม SMA'], ['team_leader', 'หัวหน้าทีม'],
+      ['store_hours', 'เวลาเปิด-ปิดร้าน'], ['open_start', 'วันเปิดสาขา'], ['open_end', 'วันจบกิจกรรม'],
+      ['install_date', 'ติดตั้งป้าย (D-7)'], ['removal_date', 'รื้อถอน (Day 6)'],
+      ['activity_detail', 'รายละเอียดกิจกรรม'], ['artwork_deadline', 'Deadline artwork'],
+      ['purchasing_contact', 'ผู้ติดต่อจัดซื้อ'], ['other_suppliers', 'Supplier อื่น'],
+      ['shop_lot_count', 'จำนวนล็อตร้านค้า', '0'], ['signage_points', 'จำนวนจุดติดป้าย', '0'],
+      ['signage_units', 'จำนวนป้าย', '0'], ['layout_photo', 'รูปผัง Layout'],
+      ['photo_folder', 'โฟลเดอร์รูป'], ['status', 'สถานะ'], ['updated_at', 'แก้ล่าสุด'], ['updated_by', 'แก้โดย']
+    ]
+  },
+  prPlan: {
+    name: 'แผน PR รายวัน',
+    cols: [
+      ['branch_key', 'สาขา'], ['store_code', 'รหัสสาขา'], ['event_day', 'วัน event'], ['date', 'วันที่'],
+      ['planned_time', 'เวลาแผน'], ['point_name', 'จุด/รายละเอียด'], ['zone_code', 'ประเภทจุด'],
+      ['manpower', 'กำลังคน'], ['leaflet_target', 'เป้าใบปลิว'], ['lat', 'lat', '0.000000'], ['long', 'long', '0.000000']
+    ]
+  },
+  signage: {
+    name: 'จุดติดป้าย',
+    cols: [
+      ['branch_key', 'สาขา'], ['store_code', 'รหัสสาขา'], ['point_no', 'จุดที่', '0'], ['unit_no', 'ป้ายที่', '0'],
+      ['sign_type', 'ชนิดป้าย'], ['variant', 'แบบ'], ['arrow', 'ลูกศร'], ['distance', 'ระยะ'],
+      ['dir_text', 'ข้อความทิศทาง'], ['landmark', 'จุดสังเกต'], ['custom_text', 'ข้อความกำหนดเอง'],
+      ['detail', 'รายละเอียดจุด'], ['coords', 'พิกัด'], ['lat', 'lat', '0.000000'], ['long', 'long', '0.000000'],
+      ['frame', 'ต้องทำโครงค้ำ'], ['install_date', 'วันติดตั้ง'], ['point_notes', 'หมายเหตุจุด'],
+      ['location_photo', 'รูปสถานที่จริง'], ['mockup_photo', 'รูปจำลองป้าย'], ['artwork_photo', 'รูป artwork']
+    ]
+  },
+  hotels: {
+    name: 'โรงแรม-ที่พัก',
+    cols: [
+      ['branch_key', 'สาขา'], ['store_code', 'รหัสสาขา'], ['hotel_name', 'ชื่อที่พัก'], ['phone', 'เบอร์โทร'],
+      ['price_per_night', 'ราคา/คืน'], ['capacity', 'รองรับ'], ['notes', 'หมายเหตุ'], ['coords', 'พิกัด'], ['photo', 'รูป']
+    ]
+  },
+  parking: {
+    name: 'ที่จอดรถ',
+    cols: [
+      ['branch_key', 'สาขา'], ['store_code', 'รหัสสาขา'], ['motorcycle', 'จอดมอเตอร์ไซค์'], ['car', 'จอดรถยนต์'],
+      ['notes', 'หมายเหตุ'], ['coords', 'พิกัด'], ['photo', 'รูป']
+    ]
+  },
+  shopLeads: {
+    name: 'Lead ร้านค้า',
+    cols: [
+      ['branch_key', 'สาขา'], ['store_code', 'รหัสสาขา'], ['shop_name', 'ชื่อร้าน'], ['phone', 'เบอร์โทร'],
+      ['product', 'สินค้า'], ['notes', 'หมายเหตุ']
+    ]
+  },
+  help: {
+    name: 'ขอสนับสนุน',
+    cols: [['branch_key', 'สาขา'], ['store_code', 'รหัสสาขา'], ['item', 'รายการ'], ['qty', 'จำนวน']]
   }
-  sheet.appendRow([name, jsonStr, new Date(), savedBy || '']);
-  return true;
+};
+
+function styleHeader_(sheet, keys, th) {
+  const n = keys.length;
+  const header = sheet.getRange(1, 1, 2, n);
+  header.setNumberFormat('@');
+  header.setValues([keys, th]);
+  header.setBackground('#002060').setFontColor('#FFFFFF').setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true);
+  sheet.getRange(2, 1, 1, n).setBackground('#1F3A75');
+  sheet.setFrozenRows(2);
+  if (sheet.getMaxColumns() > n) sheet.deleteColumns(n + 1, sheet.getMaxColumns() - n);
+  sheet.setColumnWidths(1, n, 120);
+}
+function getTab_(def) {
+  const ss = getMainSpreadsheet_();
+  let sh = ss.getSheetByName(def.name);
+  if (!sh) {
+    sh = ss.insertSheet(def.name);
+    styleHeader_(sh, def.cols.map(function (c) { return c[0]; }), def.cols.map(function (c) { return c[1]; }));
+  }
+  return sh;
+}
+
+// เขียนแถวของสาขานี้ใน tab ใหม่ทั้งชุด: ลบแถวเดิม (หาด้วยคอลัมน์ A = branch_key) แล้วต่อท้าย
+// ใช้ findAll แล้วลบจากล่างขึ้นบน — ถึงหัวหน้าจะ sort ตารางเอง แถวของสาขาไม่ได้อยู่ติดกันก็ยังลบถูก
+function replaceBranchRows_(def, branchKey, rows) {
+  const sh = getTab_(def);
+  deleteRowsWhereColA_(sh, branchKey, 3);
+  if (!rows.length) return;
+  const n = def.cols.length;
+  const start = Math.max(sh.getLastRow(), 2) + 1;
+  const formats = rows.map(function () { return def.cols.map(function (c) { return c[2] || '@'; }); });
+  const values = rows.map(function (r) {
+    return def.cols.map(function (c, i) {
+      const v = r[i];
+      if (v === null || v === undefined) return '';
+      if ((c[2] || '@') === '@') return cellText_(v);
+      const num = Number(v);
+      return (String(v).trim() !== '' && isFinite(num)) ? num : '';
+    });
+  });
+  const rng = sh.getRange(start, 1, rows.length, n);
+  rng.setNumberFormats(formats);
+  rng.setValues(values);
+}
+function deleteRowsWhereColA_(sh, key, firstDataRow) {
+  const last = sh.getLastRow();
+  if (last < firstDataRow) return;
+  const found = sh.getRange(firstDataRow, 1, last - firstDataRow + 1, 1)
+    .createTextFinder(String(key)).matchEntireCell(true).matchCase(true).findAll();
+  const rowNums = found.map(function (r) { return r.getRow(); }).sort(function (a, b) { return b - a; });
+  // รวมแถวที่ติดกันเป็นก้อนเดียวแล้วลบทีเดียว (เร็วกว่าลบทีละแถวมาก)
+  let i = 0;
+  while (i < rowNums.length) {
+    let top = rowNums[i], count = 1;
+    while (i + count < rowNums.length && rowNums[i + count] === top - 1) { top--; count++; }
+    sh.deleteRows(top, count);
+    i += count;
+  }
+}
+// กันข้อความที่ขึ้นต้นด้วย = + - @ ถูกตีความเป็นสูตร
+function cellText_(v) {
+  const s = String(v).replace(/\r\n?/g, '\n');
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+function addDaysStr_(dateStr, n) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + n);
+  return Utilities.formatDate(d, APP_TZ_, 'yyyy-MM-dd');
+}
+function nowStr_() {
+  return Utilities.formatDate(new Date(), APP_TZ_, 'yyyy-MM-dd HH:mm');
+}
+
+// แปลงข้อมูลสาขา (state จากหน้าเว็บ) -> แถวของแต่ละ tab
+function buildTabRows_(key, s, photoUrls, meta) {
+  const code = (s.branchCode && s.branchCode !== 'ไม่มีรหัส') ? s.branchCode : '';
+  const signages = Array.isArray(s.signages) ? s.signages : [];
+  const installDate = s.openStart ? addDaysStr_(s.openStart, -7) : '';
+  const photo = function (ownerId) { return photoUrls[ownerId] || ''; };
+  let unitCount = 0;
+  const signRows = [];
+  signages.forEach(function (sg, pIdx) {
+    (sg.units || []).forEach(function (u, uIdx) {
+      unitCount++;
+      const custom = [u.customLine1, u.customLine2].filter(function (x) { return x; }).join(' / ');
+      signRows.push([key, code, pIdx + 1, uIdx + 1, u.typeKey || '', u.variant || '', u.arrow || '',
+        u.showDistance ? ((u.distance || '') + ' ' + (u.unit || '')).trim() : '',
+        u.dirText || '', u.landmark || '', custom, u.detail || '', u.coords || '', u.lat, u.lng,
+        u.frame ? 'ใช่' : '', installDate, sg.notes || '',
+        photo(sg.id + '::' + uIdx + '::loc'), photo(sg.id + '::' + uIdx), photo(sg.id + '::' + uIdx + '::art')]);
+    });
+  });
+  const prRows = [];
+  (Array.isArray(s.dayPlans) ? s.dayPlans : []).forEach(function (day) {
+    const m = /^D-(\d+)$/i.exec(String(day.label || '').trim());
+    const date = (s.openStart && m) ? addDaysStr_(s.openStart, -Number(m[1])) : '';
+    (day.rows || []).forEach(function (r) {
+      if (!(r.timeStart || r.timeEnd || String(r.detail || '').trim())) return; // แถวว่าง ไม่ต้องลงชีต
+      const time = (r.timeStart && r.timeEnd) ? r.timeStart + '-' + r.timeEnd : (r.timeStart || r.timeEnd || '');
+      prRows.push([key, code, day.label || '', date, time, r.detail || '', r.pointType || '',
+        r.manpower || '', r.flyers || '', r.lat, r.lng]);
+    });
+  });
+  return {
+    branch: [[key, code, s.branchName || '', s.province || '', s.address || '', s.coords || '', s.mapLink || '',
+      s.responsible || '', s.teamSMA || '', s.teamLeader || '', s.storeHours || '', s.openStart || '', s.openEnd || '',
+      installDate, s.openStart ? addDaysStr_(s.openStart, 5) : '',
+      s.activityDetail || '', s.artworkDeadline || '', s.purchasingContact || '', s.otherSuppliers || '',
+      s.shopLotCount, signages.length, unitCount, photo('activityLayout'),
+      meta.folderUrl, meta.status, meta.updatedAt, meta.updatedBy]],
+    prPlan: prRows,
+    signage: signRows,
+    hotels: (Array.isArray(s.hotels) ? s.hotels : []).map(function (h) {
+      return [key, code, h.name || '', h.phone || '', h.pricePerNight || '', h.capacity || '', h.notes || '', h.coords || '', photo('hotel::' + h.id)];
+    }),
+    parking: (Array.isArray(s.parkings) ? s.parkings : []).map(function (p) {
+      return [key, code, p.motorcycleCount || '', p.carCount || '', p.notes || '', p.coords || '', photo('parking::' + p.id)];
+    }),
+    shopLeads: (Array.isArray(s.shopLeads) ? s.shopLeads : [])
+      .filter(function (l) { return l.shopName || l.phone || l.product || l.notes; })
+      .map(function (l) { return [key, code, l.shopName || '', l.phone || '', l.product || '', l.notes || '']; }),
+    help: (Array.isArray(s.helpItems) ? s.helpItems : [])
+      .filter(function (h) { return h.name; })
+      .map(function (h) { return [key, code, h.name || '', h.qty || '']; })
+  };
+}
+
+// ===================== ข้อมูลทั้งก้อน (ให้แอปโหลดกลับมาแก้ต่อ) =====================
+// _drafts: A branch_key | B json | C updated_at | D updated_by | E status (active/archived) | F tab_hashes
+function getDraftsTab_() {
+  const ss = getMainSpreadsheet_();
+  let sh = ss.getSheetByName(DRAFTS_TAB_);
+  if (!sh) {
+    sh = ss.insertSheet(DRAFTS_TAB_);
+    sh.getRange('A:F').setNumberFormat('@');
+    sh.getRange(1, 1, 1, 6).setValues([['branch_key', 'json', 'updated_at', 'updated_by', 'status', 'tab_hashes']]);
+    sh.setFrozenRows(1);
+    sh.hideSheet();
+  }
+  return sh;
+}
+function findRowColA_(sh, key) {
+  const last = sh.getLastRow();
+  if (last < 2) return 0;
+  const hit = sh.getRange(2, 1, last - 1, 1).createTextFinder(String(key)).matchEntireCell(true).matchCase(true).findNext();
+  return hit ? hit.getRow() : 0;
+}
+
+// { active: [...ชื่อสาขา ล่าสุดก่อน], archived: [...] } — หน้าเว็บโชว์เฉพาะ active
+// แต่ใช้ archived ด้วยตอนเตือน "ชื่อนี้มีข้อมูลอยู่แล้ว" กันพิมพ์ชื่อเดิมแล้วบันทึกทับของในคลัง
+function listDrafts() {
+  const sh = getDraftsTab_();
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return { active: [], archived: [] };
+  const keys = sh.getRange(2, 1, n, 1).getDisplayValues();
+  const meta = sh.getRange(2, 3, n, 3).getDisplayValues(); // updated_at, updated_by, status
+  const rows = keys.map(function (k, i) { return { key: k[0], at: meta[i][0], status: meta[i][2] }; })
+    .filter(function (r) { return r.key; })
+    .sort(function (a, b) { return a.at < b.at ? 1 : (a.at > b.at ? -1 : 0); });
+  return {
+    active: rows.filter(function (r) { return r.status !== 'archived'; }).map(function (r) { return r.key; }),
+    archived: rows.filter(function (r) { return r.status === 'archived'; }).map(function (r) { return r.key; })
+  };
+}
+
+function loadDraft(name) {
+  const sh = getDraftsTab_();
+  const row = findRowColA_(sh, name);
+  return row ? sh.getRange(row, 2).getValue() : null;
+}
+
+function saveDraft(name, jsonStr) {
+  const key = String(name || '').trim();
+  if (!key) throw new Error('ต้องระบุชื่อสาขา');
+  if (key.length > 150) throw new Error('ชื่อสาขายาวเกินไป');
+  let state;
+  try { state = JSON.parse(jsonStr); } catch (e) { throw new Error('ข้อมูลที่ส่งมาอ่านไม่ออก'); }
+  if (!state || typeof state !== 'object') throw new Error('ข้อมูลไม่ถูกต้อง');
+  if (String(jsonStr).length > 49000) throw new Error('ข้อมูลสาขานี้ยาวเกินที่ชีตเก็บได้ในช่องเดียว (ลดข้อความรายละเอียดลงหน่อย)');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) throw new Error('ระบบกำลังบันทึกของคนอื่นอยู่ ลองอีกครั้งใน 2-3 วินาที');
+  try {
+    const sh = getDraftsTab_();
+    let row = findRowColA_(sh, key);
+    const updatedAt = nowStr_();
+    let oldHashes = {};
+    if (row) {
+      try { oldHashes = JSON.parse(sh.getRange(row, 6).getValue() || '{}'); } catch (e) { oldHashes = {}; }
+    } else {
+      row = Math.max(sh.getLastRow(), 1) + 1;
+    }
+    const meta = { folderUrl: getBranchPhotoFolder_(key).getUrl(), status: 'ใช้งาน', updatedAt: updatedAt, updatedBy: CURRENT_USER_ };
+    const tabRows = buildTabRows_(key, state, getPhotoUrlMap_(key), meta);
+    const newHashes = {};
+    Object.keys(TABS_).forEach(function (t) {
+      // tab สาขามีเวลาแก้ล่าสุดอยู่ในแถว ต้องเขียนทุกครั้ง / tab อื่นเขียนเฉพาะตอนข้อมูลเปลี่ยน
+      newHashes[t] = hash_(JSON.stringify(tabRows[t]));
+      if (t === 'branch' || newHashes[t] !== oldHashes[t]) replaceBranchRows_(TABS_[t], key, tabRows[t]);
+    });
+    sh.getRange(row, 1, 1, 6).setValues([[cellText_(key), jsonStr, updatedAt, CURRENT_USER_, 'active', JSON.stringify(newHashes)]]);
+    SpreadsheetApp.flush();
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
+}
+function hash_(s) {
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, s, Utilities.Charset.UTF_8));
+}
+
+// เก็บเข้าคลัง (แทนการลบถาวร): ไม่ขึ้นในรายชื่อในแอปแล้ว แต่ข้อมูลและรูปยังอยู่ครบในชีต/Drive
+// อยากเอากลับมา: พิมพ์ชื่อสาขาเดิมในแอปแล้วกดโหลด หรือบันทึกทับ สถานะจะกลับเป็น "ใช้งาน" เอง
+function archiveBranch(name) {
+  const key = String(name || '');
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) throw new Error('ระบบกำลังบันทึกของคนอื่นอยู่ ลองอีกครั้งใน 2-3 วินาที');
+  try {
+    const sh = getDraftsTab_();
+    const row = findRowColA_(sh, key);
+    if (!row) throw new Error('ไม่พบสาขานี้');
+    sh.getRange(row, 5).setValue('archived');
+    const bsh = getTab_(TABS_.branch);
+    const statusCol = TABS_.branch.cols.map(function (c) { return c[0]; }).indexOf('status') + 1;
+    const bRow = findRowColA_(bsh, key);
+    if (bRow > 2) bsh.getRange(bRow, statusCol).setValue('เก็บถาวร');
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ===================== รูป (ไฟล์ jpg ใน Drive 1 รูป = 1 ไฟล์) =====================
+// _photos: A branch_key | B owner_id | C file_id | D url | E updated_at | F updated_by
+// owner_id = ช่องรูปในแอป เช่น "<signageId>::0::loc", "hotel::<id>", "activityLayout"
+function getPhotosTab_() {
+  const ss = getMainSpreadsheet_();
+  let sh = ss.getSheetByName(PHOTOS_TAB_);
+  if (!sh) {
+    sh = ss.insertSheet(PHOTOS_TAB_);
+    sh.getRange('A:F').setNumberFormat('@');
+    sh.getRange(1, 1, 1, 6).setValues([['branch_key', 'owner_id', 'file_id', 'url', 'updated_at', 'updated_by']]);
+    sh.setFrozenRows(1);
+    sh.hideSheet();
+  }
+  return sh;
+}
+function getBranchPhotoFolder_(branchKey) {
+  const parent = getSubFolder_('FOLDER_PHOTOS', 'รูปสาขา');
+  const name = String(branchKey).replace(/[\\/]/g, '-').slice(0, 120);
+  const it = parent.getFoldersByName(name);
+  return it.hasNext() ? it.next() : parent.createFolder(name);
+}
+function readPhotoIndex_(branchKey) {
+  const sh = getPhotosTab_();
+  const last = sh.getLastRow();
+  if (last < 2) return [];
+  const rows = sh.getRange(2, 1, last - 1, 1).createTextFinder(String(branchKey)).matchEntireCell(true).matchCase(true).findAll()
+    .map(function (cell) { return cell.getRow(); });
+  if (!rows.length) return [];
+  // อ่านช่วงแถวที่ครอบรูปของสาขานี้ทีเดียว (เร็วกว่าอ่านทีละแถวมาก)
+  const top = Math.min.apply(null, rows), bottom = Math.max.apply(null, rows);
+  const block = sh.getRange(top, 1, bottom - top + 1, 4).getValues();
+  return rows.map(function (r) {
+    const v = block[r - top];
+    return { row: r, ownerId: String(v[1]), fileId: String(v[2]), url: String(v[3]) };
+  });
+}
+function getPhotoUrlMap_(branchKey) {
+  const map = {};
+  readPhotoIndex_(branchKey).forEach(function (p) { map[p.ownerId] = p.url; });
+  return map;
+}
+// { ownerId: fileId } ของทุกรูปในสาขา — หน้าเว็บใช้ตัดสินว่า "ไม่มีรูปจริง" กับ "โหลดไม่สำเร็จ" ได้ชัด
+function listPhotos(branchKey) {
+  const map = {};
+  readPhotoIndex_(branchKey).forEach(function (p) { map[p.ownerId] = p.fileId; });
+  return map;
+}
+// อ่านได้เฉพาะไฟล์ที่อยู่ในสารบัญรูปของแอปเท่านั้น (กันคนส่ง fileId อื่นมาอ่านไฟล์ใน Drive ของเจ้าของ)
+function loadPhoto(fileId) {
+  const id = String(fileId || '');
+  if (!/^[A-Za-z0-9_-]{10,100}$/.test(id)) throw new Error('รหัสรูปไม่ถูกต้อง');
+  const sh = getPhotosTab_();
+  const last = sh.getLastRow();
+  const known = last >= 2 && sh.getRange(2, 3, last - 1, 1).createTextFinder(id).matchEntireCell(true).findNext();
+  if (!known) throw new Error('ไม่พบรูปนี้ในระบบ');
+  const blob = DriveApp.getFileById(id).getBlob();
+  return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+}
+// บันทึก/แทนที่รูปของช่องนั้น — dataUrl ว่าง = ลบรูปช่องนั้น (ไฟล์เดิมย้ายไปถังขยะ Drive กู้คืนได้ 30 วัน)
+function savePhoto(branchKey, ownerId, dataUrl) {
+  const key = String(branchKey || '').trim();
+  const owner = String(ownerId || '');
+  if (!key) throw new Error('ต้องกรอกชื่อสาขาก่อนแนบรูป');
+  if (!/^[A-Za-z0-9_.:-]{1,150}$/.test(owner)) throw new Error('ช่องรูปไม่ถูกต้อง');
+  let blob = null;
+  if (dataUrl) {
+    const m = /^data:(image\/(?:jpeg|png));base64,(.+)$/.exec(String(dataUrl));
+    if (!m) throw new Error('ไฟล์รูปไม่ถูกต้อง (รองรับ jpg / png)');
+    const bytes = Utilities.base64Decode(m[2]);
+    if (bytes.length > MAX_PHOTO_BYTES_) throw new Error('รูปใหญ่เกินไป');
+    const ext = m[1] === 'image/png' ? '.png' : '.jpg';
+    blob = Utilities.newBlob(bytes, m[1], owner.replace(/::/g, '_').replace(/[^A-Za-z0-9_.-]/g, '') + ext);
+  }
+  // สร้างไฟล์ก่อนเข้าคิว (ส่วนที่ช้า) แล้วค่อยล็อกตอนแก้สารบัญ — อัปหลายรูปพร้อมกันได้ไม่ติดกัน
+  const file = blob ? getBranchPhotoFolder_(key).createFile(blob) : null;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) {
+    if (file) file.setTrashed(true);
+    throw new Error('ระบบกำลังบันทึกของคนอื่นอยู่ ลองอีกครั้งใน 2-3 วินาที');
+  }
+  try {
+    const sh = getPhotosTab_();
+    const existing = readPhotoIndex_(key).filter(function (p) { return p.ownerId === owner; });
+    existing.forEach(function (p) {
+      try { DriveApp.getFileById(p.fileId).setTrashed(true); } catch (e) { /* ไฟล์เดิมหายไปแล้ว ไม่เป็นไร */ }
+    });
+    existing.map(function (p) { return p.row; }).sort(function (a, b) { return b - a; })
+      .forEach(function (r) { sh.deleteRow(r); });
+    if (!file) return { deleted: true };
+    sh.appendRow([cellText_(key), owner, file.getId(), file.getUrl(), nowStr_(), CURRENT_USER_]);
+    return { fileId: file.getId(), url: file.getUrl() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ===================== รายชื่อสาขา (ทีมดูแลเองใน tab "รายชื่อสาขา") =====================
+const MASTER_COLS_ = [
+  ['code', 'รหัสสาขา'], ['name', 'ชื่อสาขา'], ['province', 'จังหวัด'], ['amphoe', 'อำเภอ'], ['tambon', 'ตำบล'],
+  ['address', 'ที่อยู่'], ['coords', 'พิกัด (lat, long)'], ['mapLink', 'ลิงก์แผนที่'], ['openDate', 'วันเปิด (yyyy-mm-dd)'], ['status', 'สถานะ']
+];
+function getMasterTab_() {
+  const ss = getMainSpreadsheet_();
+  let sh = ss.getSheetByName(MASTER_TAB_);
+  if (!sh) {
+    sh = ss.insertSheet(MASTER_TAB_);
+    styleHeader_(sh, MASTER_COLS_.map(function (c) { return c[0]; }), MASTER_COLS_.map(function (c) { return c[1]; }));
+    sh.getRange('A:J').setNumberFormat('@');
+    sh.setColumnWidth(6, 260);
+  }
+  return sh;
+}
+function getBranchMasterData() {
+  const sh = getMasterTab_();
+  const n = sh.getLastRow() - 2;
+  if (n < 1) return [];
+  return sh.getRange(3, 1, n, MASTER_COLS_.length).getDisplayValues()
+    .filter(function (r) { return r[1]; }) // ต้องมีชื่อสาขา
+    .map(function (r) {
+      const o = {};
+      MASTER_COLS_.forEach(function (c, i) { o[c[0]] = String(r[i] || '').trim(); });
+      if (!o.mapLink && o.coords) o.mapLink = 'https://www.google.com/maps?q=' + o.coords.replace(/\s+/g, '');
+      if (o.openDate && !/^\d{4}-\d{2}-\d{2}$/.test(o.openDate)) o.openDate = ''; // รูปแบบวันที่ผิด -> ไม่เดา
+      return o;
+    });
 }
 
 // ================= PR check-in (เช็คอินจุดประชาสัมพันธ์หน้างาน) =================
 // ทีมหน้างานกด "เช็คอิน" ที่จุดแจกใบปลิวแต่ละจุดในแผนรายวัน (Step 4) -> ส่งพิกัด GPS + รูปยืนยัน + จำนวนที่แจกจริง
 // มาที่นี่ 1 ครั้ง = 1 แถวในชีต "PR Check-in" ให้ HQ เอาไปสรุป/วิเคราะห์ต่อ
-// - ชีตและโฟลเดอร์รูปสร้างเองอัตโนมัติครั้งแรกที่ใช้ เก็บ ID ไว้ใน Script Properties
-//   (CHECKIN_SHEET_ID, CHECKIN_PHOTO_FOLDER_ID) แยกจากชีต draft เดิม (SHEET_ID)
+// - v2: เป็น tab "PR Check-in" ในชีตข้อมูลหลัก รูปอยู่โฟลเดอร์ "รูปเช็คอิน PR" ใต้โฟลเดอร์หลัก
 // - กันแถวซ้ำ: หน้าเว็บสร้างรหัสเช็คอิน (checkinId) ให้ทุกครั้ง ถ้าเน็ตหลุดแล้วกดส่งซ้ำด้วยรหัสเดิม
 //   ที่นี่จะไม่เขียนแถวใหม่ แค่ตอบกลับว่าบันทึกไปแล้ว — รหัสเก็บในชีตซ่อน "_checkin_ids" แยกต่างหาก
 //   เพื่อให้คอลัมน์ในชีตหลักตรงตามแบบ (จบที่ leaflet_pct) ไม่มีคอลัมน์เกิน
@@ -307,16 +676,9 @@ const CHECKIN_COL_FORMATS_ = ['@', '@', '@', '@', '@', '@', '0', '@', '0.000000'
 const CHECKIN_TZ_ = 'Asia/Bangkok';
 const CHECKIN_MAX_PHOTO_BYTES_ = 5 * 1024 * 1024;
 
+// v2: PR Check-in เป็น tab หนึ่งในชีตข้อมูลหลัก หัวหน้าเปิดไฟล์เดียวเห็นทั้งแผนและผลจริง
 function getCheckinSpreadsheet_() {
-  const props = PropertiesService.getScriptProperties();
-  const ssId = props.getProperty('CHECKIN_SHEET_ID');
-  if (ssId) {
-    try { return SpreadsheetApp.openById(ssId); } catch (e) { /* ID เดิมใช้ไม่ได้แล้ว (ถูกลบ/ไม่มีสิทธิ์) — สร้างใหม่ด้านล่าง */ }
-  }
-  const ss = SpreadsheetApp.create('CJX PackGO — PR Check-in (do not rename/delete)');
-  ss.setSpreadsheetTimeZone(CHECKIN_TZ_);
-  props.setProperty('CHECKIN_SHEET_ID', ss.getId());
-  return ss;
+  return getMainSpreadsheet_();
 }
 
 function setupCheckinSheet_(sheet) {
@@ -363,16 +725,9 @@ function getCheckinIdSheet_(ss) {
   return sheet;
 }
 
+// ตั้งใจไม่แชร์อัตโนมัติ — รูปมีพิกัดและอาจมีหน้าคน (เจ้าของแชร์โฟลเดอร์หลักให้คนที่เกี่ยวข้องเอง)
 function getCheckinPhotoFolder_() {
-  const props = PropertiesService.getScriptProperties();
-  const folderId = props.getProperty('CHECKIN_PHOTO_FOLDER_ID');
-  if (folderId) {
-    try { return DriveApp.getFolderById(folderId); } catch (e) { /* โฟลเดอร์เดิมหาย — สร้างใหม่ */ }
-  }
-  // ตั้งใจไม่เรียก setSharing — รูปมีพิกัดและอาจมีหน้าคน จึงเริ่มจาก "เจ้าของเห็นคนเดียว" ไว้ก่อน
-  const folder = DriveApp.createFolder('CJX PackGO — รูปเช็คอิน PR');
-  props.setProperty('CHECKIN_PHOTO_FOLDER_ID', folder.getId());
-  return folder;
+  return getSubFolder_('FOLDER_CHECKIN', 'รูปเช็คอิน PR');
 }
 
 // ระยะห่างบนผิวโลกระหว่าง 2 พิกัด (สูตร haversine) หน่วยเมตร
@@ -665,17 +1020,12 @@ function insertContain_(slide, blob, x, y, maxW, maxH) {
 // Folder that holds every generated deck, shared view-access with the whole
 // cjmart.co.th domain so any teammate who gets the link can open it (same
 // domain-restricted model as the rest of this tool — no public access).
+// โฟลเดอร์สไลด์แชร์ให้ทุกคนในบริษัทแก้ได้ (เหมือนเดิม) — คนกดสร้างสไลด์ต้องเปิดไฟล์ที่ได้ได้ทันที
 function getDecksFolder_() {
-  var props = PropertiesService.getScriptProperties();
-  var folderId = props.getProperty('DECKS_FOLDER_ID');
-  var folder = null;
-  if (folderId) {
-    try { folder = DriveApp.getFolderById(folderId); } catch (e) { folderId = null; }
-  }
-  if (!folderId) {
-    folder = DriveApp.createFolder('CJX PackGO — สไลด์ที่สร้างไว้');
+  const isNew = !PropertiesService.getScriptProperties().getProperty('FOLDER_DECKS');
+  const folder = getSubFolder_('FOLDER_DECKS', 'สไลด์ Pack GO');
+  if (isNew) {
     try { folder.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.EDIT); } catch (e) { /* sharing best-effort */ }
-    props.setProperty('DECKS_FOLDER_ID', folder.getId());
   }
   return folder;
 }
